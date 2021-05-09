@@ -2,6 +2,7 @@
 
 -export([get_pools/0]).
 
-get_pools() -> restc:request("https://api.github.com").
+% get_pools() -> restc:request("https://api.github.com/").
+get_pools() -> foo.
 
 
