@@ -21,6 +21,10 @@ test:
 shell: compile
 	rebar3 shell
 
+auto: compile
+	rebar3 auto
+
+
 release: deps
 	rebar3 release
 
