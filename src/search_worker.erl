@@ -1,6 +1,6 @@
 -module(search_worker).
 
--define(POOL_ID, 23077202).
+-define(POOL_ID, <<"23077202">>).
 -define(WAIT_TIMEOUT, 10000).
 -define(QUOTE_DATA, [
     #{url => <<"ya.ru">>, screenshot => <<"123">>},

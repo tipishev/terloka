@@ -1,12 +1,14 @@
 -module(toloka).
 
--export([create_task/2, get_quotes/1,
-         download_attachment/1,
-         open_pool/1]).
+-export([
+    create_task/2,
+    get_quotes/1,
+    % move_to_yadisk/1,
+    open_pool/1
+]).
 
 -include("http_status_codes.hrl").
 
--define(YANDEX_DISK_TOKEN, <<"AQAAAAAZfxSeAADLW71qa7wwGE_6ruZTmmVBRKU">>).
 -define(TOLOKA_BASE_URI, <<"https://toloka.yandex.ru/api/v1">>).
 -define(TOLOKA_TOKEN, <<"AQAAAAAZfxSeAACtpfveFFq4aEwOlvt1tH1YCeI">>).
 
@@ -29,12 +31,8 @@ open_pool(PoolId) ->
     Body.
 
 % fun fact: meta info is available at /attachments/{attachment_id}
-download_attachment(AttachmentId) ->
-    Url = urlize(<<"/attachments/", AttachmentId/binary, "/download">>),
-    Headers = headers(),
-    {ok, ?HTTP_STATUS_OK, _ResponseHeaders, BodyRef} = hackney:get(Url, Headers),
-    {ok, Body} = hackney:body(BodyRef),
-    Body.
+% move_to_yadisk(AttachmentId) ->
+%     TolokaUrl = urlize(<<"/attachments/", AttachmentId/binary, "/download">>),
 
 %  file:write_file("foo.png", PngBytes).
 
