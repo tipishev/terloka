@@ -2,33 +2,35 @@
 
 -export([
     upload/2,
-    is_ready/1
+    is_uploaded/1
 ]).
 
 -include("http_status_codes.hrl").
 
 -define(YANDEX_DISK_TOKEN, <<"AQAAAAAZfxSeAADLW71qa7wwGE_6ruZTmmVBRKU">>).
--define(YANDEX_DISK_BASE_DIR, <<"/Приложения/Яндекс.Толока/screenshots/">>).
+-define(YANDEX_DISK_BASE_DIR, "/Приложения/Яндекс.Толока/screenshots/").
 -define(YANDEX_DISK_BASE_URI, <<"https://cloud-api.yandex.net/v1/disk">>).
 
 
 upload(FromUrl, FileName) ->
-    Path = <<?YANDEX_DISK_BASE_DIR, FileName/bytes>>,
+    Path = <<?YANDEX_DISK_BASE_DIR/utf8, FileName/bytes>>,
     YadiskUrl = hackney_url:make_url(
         <<"">>, <<"/resources/upload">>, [ {<<"path">>, Path}, {<<"url">>, FromUrl} ]),
     {?HTTP_STATUS_ACCEPTED, Body} = post(YadiskUrl),
-    maps:get(<<"href">>, Body).
+    Url = maps:get(<<"href">>, Body),
+    _OperationId = lists:last(binary:split(Url, <<"/">>, [global])).
 
-is_ready(Url) ->
-    {ok, ?HTTP_STATUS_OK, _Headers, BodyRef} = hackney:get(Url, headers()),
-    {ok, Body} = hackney:body(BodyRef),
-    maps:get(<<"status">>, jsx:decode(Body, [return_maps])).
+is_uploaded(OperationId) ->
+    operation_status(OperationId) =:= <<"success">>.
 
 %%% Private Functions
 
+operation_status(OperationId) ->
+    {?HTTP_STATUS_OK, Body} = get_(<<"/operations/", OperationId/binary>>),
+    maps:get(<<"status">>, Body).
+
 get_(Path) ->
     Url = urlize(Path),
-    io:format(Url),
     Headers = headers(),
     {ok, StatusCode, _ResponseHeaders, BodyRef} = hackney:get(Url, Headers),
     {ok, Body} = hackney:body(BodyRef),
@@ -40,13 +42,6 @@ post(Path) ->
     {ok, StatusCode, _ResponseHeaders, BodyRef} = hackney:post(Url, Headers),
     {ok, Body} = hackney:body(BodyRef),
     {StatusCode, jsx:decode(Body, [return_maps])}.
-% post(Path, Json) ->
-%     Url = urlize(Path),
-%     Headers = headers(),
-%     Payload = jsx:encode(Json),
-%     {ok, StatusCode, _ResponseHeaders, BodyRef} = hackney:post(Url, Headers, Payload),
-%     {ok, Body} = hackney:body(BodyRef),
-%     {StatusCode, jsx:decode(Body, [return_maps])}.
 
 urlize(Path) ->
     <<?YANDEX_DISK_BASE_URI/binary, Path/binary>>.
