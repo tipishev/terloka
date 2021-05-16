@@ -3,7 +3,7 @@
 -export([
     create_task/2,
     get_quotes/1,
-    % move_to_yadisk/1,
+    copy_attachment_to_yadisk/1,
     open_pool/1
 ]).
 
@@ -31,10 +31,8 @@ open_pool(PoolId) ->
     Body.
 
 % fun fact: meta info is available at /attachments/{attachment_id}
-% move_to_yadisk(AttachmentId) ->
-%     TolokaUrl = urlize(<<"/attachments/", AttachmentId/binary, "/download">>),
-
-%  file:write_file("foo.png", PngBytes).
+copy_attachment_to_yadisk(AttachmentId) ->
+    TolokaUrl = urlize(<<"/attachments/", AttachmentId/binary, "/download">>).
 
 %%% Private Functions
 
