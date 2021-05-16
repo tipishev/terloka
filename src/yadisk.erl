@@ -8,12 +8,12 @@
 -include("http_status_codes.hrl").
 
 -define(YANDEX_DISK_TOKEN, <<"AQAAAAAZfxSeAADLW71qa7wwGE_6ruZTmmVBRKU">>).
-% -define(YANDEX_DISK_BASE_DIR, "/Приложения/Яндекс.Толока/screenshots/"/utf8>>).
+-define(YANDEX_DISK_BASE_DIR, <<"/Приложения/Яндекс.Толока/screenshots/">>).
 -define(YANDEX_DISK_BASE_URI, <<"https://cloud-api.yandex.net/v1/disk">>).
 
 
 upload(FromUrl, FileName) ->
-    Path = <<"/Приложения/Яндекс.Толока/screenshots/"/utf8, FileName/bytes>>,
+    Path = <<?YANDEX_DISK_BASE_DIR, FileName/bytes>>,
     YadiskUrl = hackney_url:make_url(
         <<"">>, <<"/resources/upload">>, [ {<<"path">>, Path}, {<<"url">>, FromUrl} ]),
     {?HTTP_STATUS_ACCEPTED, Body} = post(YadiskUrl),
