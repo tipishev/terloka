@@ -2,12 +2,13 @@
 
 -export([
     upload/2,
+    upload_bytes/2,
     is_uploaded/1
 ]).
 
 -include("http_status_codes.hrl").
 
--define(YANDEX_DISK_TOKEN, <<"AQAAAAAZfxSeAADLW71qa7wwGE_6ruZTmmVBRKU">>).
+-define(YANDEX_DISK_TOKEN, <<"AQAAAAAZfxSeAADLWxJUnxBOpk33sHiS8eJjKzE">>).
 -define(YANDEX_DISK_BASE_DIR, "/Приложения/Яндекс.Толока/screenshots/").
 -define(YANDEX_DISK_BASE_URI, <<"https://cloud-api.yandex.net/v1/disk">>).
 
@@ -19,6 +20,14 @@ upload(FromUrl, FileName) ->
     {?HTTP_STATUS_ACCEPTED, Body} = post(YadiskUrl),
     Url = maps:get(<<"href">>, Body),
     _OperationId = lists:last(binary:split(Url, <<"/">>, [global])).
+
+upload_bytes(Bytes, FileName) ->
+    Path = <<?YANDEX_DISK_BASE_DIR/utf8, FileName/bytes>>,
+    YadiskUrl = hackney_url:make_url(<<"">>, <<"/resources/upload">>,
+                                     [ {<<"path">>, Path}, {<<"overwrite">>, true} ]),
+    {?HTTP_STATUS_OK, #{<<"href">> := Href, <<"operation_id">> := OperationId}} = get_(YadiskUrl),
+    {ok, ?HTTP_STATUS_CREATED, _ResponseHeaders, _BodyRef} = hackney:put(Href, headers(), Bytes),
+    OperationId.
 
 is_uploaded(OperationId) ->
     operation_status(OperationId) =:= <<"success">>.
