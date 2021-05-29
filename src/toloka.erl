@@ -2,9 +2,9 @@
 
 -export([
     create_task/2,
+    open_pool/1,
     get_quotes/1,
-    copy_attachment_to_yadisk/1,
-    open_pool/1
+    copy_attachment_to_yadisk/1
 ]).
 
 -include("http_status_codes.hrl").
@@ -23,31 +23,40 @@ create_task(PoolId, Description) ->
 
 % TODO count the failed attempts by dropping status=ACCEPTED
 get_quotes(TaskId) ->
-    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", TaskId/binary, "&status=ACCEPTED">>),
+    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", TaskId/binary, "&status=SUBMITTED">>),
     [AcceptedAssignment] = maps:get(<<"items">>, Body),
     [Solution] = maps:get(<<"solutions">>, AcceptedAssignment),
     OutputValues = maps:get(<<"output_values">>, Solution),
-    [
+    Quotes = [
      {maps:get(<<"URL-0">>, OutputValues), maps:get(<<"price-0">>, OutputValues),
       maps:get(<<"screenshot-0">>, OutputValues)},
      {maps:get(<<"URL-1">>, OutputValues), maps:get(<<"price-1">>, OutputValues),
       maps:get(<<"screenshot-1">>, OutputValues)},
      {maps:get(<<"URL-2">>, OutputValues), maps:get(<<"price-2">>, OutputValues),
       maps:get(<<"screenshot-2">>, OutputValues)}
-    ].
+    ],
+    AttachmentIds = [AttachmentId || {_Url, _Price, AttachmentId} <- Quotes],
+    FileNames = upload_attachments(AttachmentIds),
+    [{Url, Price, FileName}
+     || {{Url, Price, _AttachmentIds}, FileName} <- lists:zip(Quotes, FileNames)].
 
 open_pool(PoolId) ->
     {?HTTP_STATUS_ACCEPTED, Body} = post(<<"/pools/", PoolId/binary, "/open">>),
     Body.
 
+upload_attachments(AttachmentIds) ->
+    [FileName || {FileName, _OperationId} <- [copy_attachment_to_yadisk(AttachmentId) || AttachmentId <- AttachmentIds]].
+
 copy_attachment_to_yadisk(AttachmentId) ->
+    log("Uploading ~p...~n", [AttachmentId]),
     {?HTTP_STATUS_OK, Body} = get_(<<"/attachments/",  AttachmentId/binary>>),
     FileNameFromUser = maps:get(<<"name">>, Body),
     FileExtension =  lists:last(binary:split(FileNameFromUser,  <<".">>, [global])),
     FileName = <<AttachmentId/binary, ".", FileExtension/binary>>,
 
     Bytes = download_attachment(AttachmentId),
-    yadisk:upload_bytes(Bytes, FileName).
+    OperationId = yadisk:upload_bytes(Bytes, FileName),
+    {FileName, OperationId}.
 
 %%% Private Functions
 
@@ -87,3 +96,6 @@ headers() ->
 
 urlize(Path) ->
     <<?TOLOKA_BASE_URI/binary, Path/binary>>.
+
+log(String, Args) ->
+    io:format(String, Args).

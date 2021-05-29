@@ -12,7 +12,7 @@
 -define(YANDEX_DISK_BASE_DIR, "/Приложения/Яндекс.Толока/screenshots/").
 -define(YANDEX_DISK_BASE_URI, <<"https://cloud-api.yandex.net/v1/disk">>).
 
-
+% this works, but not for Toloka attachments, because Yadisk has no access.
 upload(FromUrl, FileName) ->
     Path = <<?YANDEX_DISK_BASE_DIR/utf8, FileName/bytes>>,
     YadiskUrl = hackney_url:make_url(
