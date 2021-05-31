@@ -1,7 +1,8 @@
 -module(toloka).
 
 -export([
-    create_task/2,
+    create_search_task/2,
+    create_check_task/3,
     open_pool/1,
     get_quotes/1,
     copy_attachment_to_yadisk/1
@@ -13,13 +14,24 @@
 -define(TOLOKA_TOKEN, <<"AQAAAAAZfxSeAACtpcBhALKZ7k7YjgKe9rNIu5s">>).
 
 % TODO create multiple tasks in one request
-create_task(PoolId, Description) ->
+create_search_task(SearchPoolId, Description) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [#{
             input_values => #{description => Description},
-            pool_id => PoolId,
+            pool_id => SearchPoolId,
             overlap => 1
         }]),
     maps:get(<<"id">>, maps:get(<<"0">>, maps:get(<<"items">>, Body))).
+
+create_check_task(CheckPoolId, Description, Screenshot) ->
+    {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [
+        #{
+            input_values => #{description => Description, screenshot => Screenshot},
+            pool_id => CheckPoolId,
+            overlap => 1
+        }
+    ]),
+    maps:get(<<"id">>, maps:get(<<"0">>, maps:get(<<"items">>, Body))).
+
 
 % TODO count the failed attempts by dropping status=ACCEPTED
 get_quotes(TaskId) ->

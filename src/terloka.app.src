@@ -5,7 +5,8 @@
   {mod, {terloka_app, []}},
   {applications,
    [kernel,
-    stdlib
+    stdlib,
+    hackney
    ]},
   {env,[]},
   {modules, []},
