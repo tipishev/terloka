@@ -2,9 +2,9 @@
 
 -export([
     create_search_task/1,
-    create_check_task/2,
     open_pool/1,
-    get_quotes/1
+    get_quotes/1,
+    create_check_task/2
 ]).
 
 -include("http_status_codes.hrl").

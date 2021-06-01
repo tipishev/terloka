@@ -1,7 +1,7 @@
 -module(yadisk).
 
 -export([
-    upload/2,
+    upload_url/2,
     upload_bytes/2,
     is_uploaded/1
 ]).
@@ -13,7 +13,7 @@
 -define(YANDEX_DISK_BASE_URI, <<"https://cloud-api.yandex.net/v1/disk">>).
 
 % this works, but not for Toloka attachments, because Yadisk has no access.
-upload(FromUrl, FileName) ->
+upload_url(FromUrl, FileName) ->
     Path = <<?YANDEX_DISK_BASE_DIR/utf8, FileName/bytes>>,
     YadiskUrl = hackney_url:make_url(
         <<"">>, <<"/resources/upload">>, [ {<<"path">>, Path}, {<<"url">>, FromUrl} ]),
@@ -34,6 +34,11 @@ is_uploaded(OperationId) ->
 
 %%% Private Functions
 
+%%% HTTP wrappers
+
+urlize(Path) ->
+    <<?YANDEX_DISK_BASE_URI/binary, Path/binary>>.
+
 operation_status(OperationId) ->
     {?HTTP_STATUS_OK, Body} = get_(<<"/operations/", OperationId/binary>>),
     maps:get(<<"status">>, Body).
@@ -51,9 +56,6 @@ post(Path) ->
     {ok, StatusCode, _ResponseHeaders, BodyRef} = hackney:post(Url, Headers),
     {ok, Body} = hackney:body(BodyRef),
     {StatusCode, jsx:decode(Body, [return_maps])}.
-
-urlize(Path) ->
-    <<?YANDEX_DISK_BASE_URI/binary, Path/binary>>.
 
 headers() ->
     [
