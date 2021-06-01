@@ -4,7 +4,8 @@
     create_search_task/1,
     open_pool/1,
     get_quotes/1,
-    create_check_task_suite/2
+    create_check_task_suite/1,
+    description/4
 ]).
 
 -include("http_status_codes.hrl").
@@ -27,8 +28,7 @@ create_search_task(Description) ->
 open_pool(PoolId) ->
     {?HTTP_STATUS_ACCEPTED, Body} = post(<<"/pools/", PoolId/binary, "/open">>),
     Body.
-
-create_check_task_suite(Description, Screenshot) ->
+create_check_task_suite(DescriptionScreenshots) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/task-suites">>, #{
         <<"pool_id">> => ?CHECK_POOL_ID,
         <<"overlap">> => 3,
@@ -36,24 +36,20 @@ create_check_task_suite(Description, Screenshot) ->
             #{
                 <<"input_values">> => #{
                     <<"description">> => Description,
-                    <<"screenshot">> => Screenshot
+                    <<"screenshot">> => <<"screenshots/", Screenshot/binary>>
                 }
             }
+            || {Description, Screenshot} <- DescriptionScreenshots
         ]
     }),
+
+    % TODO extract only relevant IDs from the Body
     Body.
-    % {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [
-    %     #{
-    %         input_values => #{description => Description, screenshot => Screenshot},
-    %         pool_id => ?CHECK_POOL_ID,
-    %         overlap => 3
-    %     }
-    % ]),
-    % maps:get(<<"id">>, maps:get(<<"0">>, maps:get(<<"items">>, Body))).
 
 
 % TODO count the failed attempts by counting statuses other than ACCEPTED
 get_quotes(TaskId) ->
+    % FIXME SUBMITTED vs ACCEPTED
     % {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", TaskId/binary, "&status=SUBMITTED">>),
     {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", TaskId/binary, "&status=ACCEPTED">>),
     #{
@@ -89,6 +85,14 @@ get_quotes(TaskId) ->
     ].
 
 %%% Private Functions
+
+%%% Descriptions
+
+% FIXME sanitize user input
+description(Name, _Price, _City, _Url) ->
+    io_lib:format("~p~n", [Name]).
+    % <<Name/utf8, "по цене"/utf8, Price, "р. в городе "/utf8,
+      % City/utf8, "\nНа сайте "/utf8, Url/utf8>>.
 
 %%% Attachments
 
