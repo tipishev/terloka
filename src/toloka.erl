@@ -1,8 +1,8 @@
 -module(toloka).
 
 -export([
-    create_search_task/2,
-    create_check_task/3,
+    create_search_task/1,
+    create_check_task/2,
     open_pool/1,
     get_quotes/1
 ]).
@@ -11,25 +11,28 @@
 
 -define(TOLOKA_BASE_URI, <<"https://toloka.yandex.ru/api/v1">>).
 -define(TOLOKA_TOKEN, <<"AQAAAAAZfxSeAACtpcBhALKZ7k7YjgKe9rNIu5s">>).
+-define(SEARCH_POOL_ID, <<"23077202">>).
+-define(CHECK_POOL_ID, <<"24538798">>).
 
 % TODO create multiple tasks in one request
-create_search_task(SearchPoolId, Description) ->
+create_search_task(Description) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [#{
             input_values => #{description => Description},
-            pool_id => SearchPoolId,
+            pool_id => ?SEARCH_POOL_ID,
             overlap => 1
         }]),
-    maps:get(<<"id">>, maps:get(<<"0">>, maps:get(<<"items">>, Body))).
+    #{<<"items">> := #{<<"0">> := #{<<"id">> := TaskId}}} = Body,
+    TaskId.
 
 open_pool(PoolId) ->
     {?HTTP_STATUS_ACCEPTED, Body} = post(<<"/pools/", PoolId/binary, "/open">>),
     Body.
 
-create_check_task(CheckPoolId, Description, Screenshot) ->
+create_check_task(Description, Screenshot) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [
         #{
             input_values => #{description => Description, screenshot => Screenshot},
-            pool_id => CheckPoolId,
+            pool_id => ?CHECK_POOL_ID,
             overlap => 3
         }
     ]),
@@ -76,26 +79,28 @@ get_quotes(TaskId) ->
 
 %%% Attachments
 
-download_attachment(AttachmentId) ->
+download(AttachmentId) ->
     AttachmentDownloadPath = <<"/attachments/", AttachmentId/binary, "/download">>,
     {?HTTP_STATUS_OK, Bytes} = get_(binary, AttachmentDownloadPath),
     Bytes.
 
+generate_filename(AttachmentId) ->
+    {?HTTP_STATUS_OK, Body} = get_(<<"/attachments/",  AttachmentId/binary>>),
+    #{<<"name">> := FilenameFromUser} = Body,
+    FileExtension =  lists:last(binary:split(FilenameFromUser,  <<".">>, [global])),
+    Filename = <<AttachmentId/binary, ".", FileExtension/binary>>,
+    Filename.
+
 copy_to_yadisk(AttachmentId) ->
     log("Uploading ~p...~n", [AttachmentId]),
-    {?HTTP_STATUS_OK, Body} = get_(<<"/attachments/",  AttachmentId/binary>>),
-    FileNameFromUser = maps:get(<<"name">>, Body),
-    FileExtension =  lists:last(binary:split(FileNameFromUser,  <<".">>, [global])),
-    FileName = <<AttachmentId/binary, ".", FileExtension/binary>>,
-
-    Bytes = download_attachment(AttachmentId),
+    FileName = generate_filename(AttachmentId),
+    Bytes = download(AttachmentId),
     OperationId = yadisk:upload_bytes(Bytes, FileName),
     {FileName, OperationId}.
 
 %%% HTTP wrappers
 
-urlize(Path) ->
-    <<?TOLOKA_BASE_URI/binary, Path/binary>>.
+urlize(Path) -> <<?TOLOKA_BASE_URI/binary, Path/binary>>.
 
 post(Path) -> post(Path, <<>>).
 post(Path, Json) ->
