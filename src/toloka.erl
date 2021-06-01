@@ -4,7 +4,7 @@
     create_search_task/1,
     open_pool/1,
     get_quotes/1,
-    create_check_task/2
+    create_check_task_suite/2
 ]).
 
 -include("http_status_codes.hrl").
@@ -28,15 +28,28 @@ open_pool(PoolId) ->
     {?HTTP_STATUS_ACCEPTED, Body} = post(<<"/pools/", PoolId/binary, "/open">>),
     Body.
 
-create_check_task(Description, Screenshot) ->
-    {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [
-        #{
-            input_values => #{description => Description, screenshot => Screenshot},
-            pool_id => ?CHECK_POOL_ID,
-            overlap => 3
-        }
-    ]),
-    maps:get(<<"id">>, maps:get(<<"0">>, maps:get(<<"items">>, Body))).
+create_check_task_suite(Description, Screenshot) ->
+    {?HTTP_STATUS_CREATED, Body} = post(<<"/task-suites">>, #{
+        <<"pool_id">> => ?CHECK_POOL_ID,
+        <<"overlap">> => 3,
+        <<"tasks">> => [
+            #{
+                <<"input_values">> => #{
+                    <<"description">> => Description,
+                    <<"screenshot">> => Screenshot
+                }
+            }
+        ]
+    }),
+    Body.
+    % {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [
+    %     #{
+    %         input_values => #{description => Description, screenshot => Screenshot},
+    %         pool_id => ?CHECK_POOL_ID,
+    %         overlap => 3
+    %     }
+    % ]),
+    % maps:get(<<"id">>, maps:get(<<"0">>, maps:get(<<"items">>, Body))).
 
 
 % TODO count the failed attempts by counting statuses other than ACCEPTED
