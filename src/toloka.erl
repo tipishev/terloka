@@ -133,5 +133,5 @@ headers() ->
 
 % Logging
 
-log(String, Args) ->
-    io:format(String, Args).
+% TODO real logging
+log(String, Args) -> io:format(String, Args).
