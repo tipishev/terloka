@@ -4,8 +4,7 @@
     create_search_task/2,
     create_check_task/3,
     open_pool/1,
-    get_quotes/1,
-    copy_attachment_to_yadisk/1
+    get_quotes/1
 ]).
 
 -include("http_status_codes.hrl").
@@ -22,44 +21,67 @@ create_search_task(SearchPoolId, Description) ->
         }]),
     maps:get(<<"id">>, maps:get(<<"0">>, maps:get(<<"items">>, Body))).
 
+open_pool(PoolId) ->
+    {?HTTP_STATUS_ACCEPTED, Body} = post(<<"/pools/", PoolId/binary, "/open">>),
+    Body.
+
 create_check_task(CheckPoolId, Description, Screenshot) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [
         #{
             input_values => #{description => Description, screenshot => Screenshot},
             pool_id => CheckPoolId,
-            overlap => 1
+            overlap => 3
         }
     ]),
     maps:get(<<"id">>, maps:get(<<"0">>, maps:get(<<"items">>, Body))).
 
 
-% TODO count the failed attempts by dropping status=ACCEPTED
+% TODO count the failed attempts by counting statuses other than ACCEPTED
 get_quotes(TaskId) ->
-    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", TaskId/binary, "&status=SUBMITTED">>),
-    [AcceptedAssignment] = maps:get(<<"items">>, Body),
-    [Solution] = maps:get(<<"solutions">>, AcceptedAssignment),
-    OutputValues = maps:get(<<"output_values">>, Solution),
-    Quotes = [
-     {maps:get(<<"URL-0">>, OutputValues), maps:get(<<"price-0">>, OutputValues),
-      maps:get(<<"screenshot-0">>, OutputValues)},
-     {maps:get(<<"URL-1">>, OutputValues), maps:get(<<"price-1">>, OutputValues),
-      maps:get(<<"screenshot-1">>, OutputValues)},
-     {maps:get(<<"URL-2">>, OutputValues), maps:get(<<"price-2">>, OutputValues),
-      maps:get(<<"screenshot-2">>, OutputValues)}
-    ],
-    AttachmentIds = [AttachmentId || {_Url, _Price, AttachmentId} <- Quotes],
-    FileNames = upload_attachments(AttachmentIds),
-    [{Url, Price, FileName}
-     || {{Url, Price, _AttachmentIds}, FileName} <- lists:zip(Quotes, FileNames)].
+    % {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", TaskId/binary, "&status=SUBMITTED">>),
+    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", TaskId/binary, "&status=ACCEPTED">>),
+    #{
+        <<"items">> := [
+            #{
+                <<"solutions">> := [
+                    #{
+                        <<"output_values">> := #{
+                            <<"URL-0">> := Url0,
+                            <<"URL-1">> := Url1,
+                            <<"URL-2">> := Url2,
 
-open_pool(PoolId) ->
-    {?HTTP_STATUS_ACCEPTED, Body} = post(<<"/pools/", PoolId/binary, "/open">>),
-    Body.
+                            <<"price-0">> := Price0,
+                            <<"price-1">> := Price1,
+                            <<"price-2">> := Price2,
 
-upload_attachments(AttachmentIds) ->
-    [FileName || {FileName, _OperationId} <- [copy_attachment_to_yadisk(AttachmentId) || AttachmentId <- AttachmentIds]].
+                            <<"screenshot-0">> := AttachmentId0,
+                            <<"screenshot-1">> := AttachmentId1,
+                            <<"screenshot-2">> := AttachmentId2
+                        }
+                    }
+                ]
+            }
+        ]
+    } = Body,
+    {Filename0, _OperationId0} = copy_to_yadisk(AttachmentId0),
+    {Filename1, _OperationId1} = copy_to_yadisk(AttachmentId1),
+    {Filename2, _OperationId2} = copy_to_yadisk(AttachmentId2),
+    [
+        {Url0, Price0, Filename0},
+        {Url1, Price1, Filename1},
+        {Url2, Price2, Filename2}
+    ].
 
-copy_attachment_to_yadisk(AttachmentId) ->
+%%% Private Functions
+
+%%% Attachments
+
+download_attachment(AttachmentId) ->
+    AttachmentDownloadPath = <<"/attachments/", AttachmentId/binary, "/download">>,
+    {?HTTP_STATUS_OK, Bytes} = get_(binary, AttachmentDownloadPath),
+    Bytes.
+
+copy_to_yadisk(AttachmentId) ->
     log("Uploading ~p...~n", [AttachmentId]),
     {?HTTP_STATUS_OK, Body} = get_(<<"/attachments/",  AttachmentId/binary>>),
     FileNameFromUser = maps:get(<<"name">>, Body),
@@ -70,16 +92,14 @@ copy_attachment_to_yadisk(AttachmentId) ->
     OperationId = yadisk:upload_bytes(Bytes, FileName),
     {FileName, OperationId}.
 
-%%% Private Functions
+%%% HTTP wrappers
 
-download_attachment(AttachmentId) ->
-    AttachmentDownloadPath = <<"/attachments/", AttachmentId/binary, "/download">>,
-    {?HTTP_STATUS_OK, Bytes} = get_(binary, AttachmentDownloadPath),
-    Bytes.
+urlize(Path) ->
+    <<?TOLOKA_BASE_URI/binary, Path/binary>>.
 
 post(Path) -> post(Path, <<>>).
 post(Path, Json) ->
-    Url = <<?TOLOKA_BASE_URI/binary, Path/binary>>,
+    Url = urlize(Path),
     Headers = headers(),
     Payload = jsx:encode(Json),
     {ok, StatusCode, _ResponseHeaders, BodyRef} = hackney:post(Url, Headers, Payload),
@@ -89,7 +109,7 @@ post(Path, Json) ->
 get_(Path) -> get_(json, Path).
 
 get_(ResponseType, Path) ->
-    Url = <<?TOLOKA_BASE_URI/binary, Path/binary>>,
+    Url = urlize(Path),
     Headers = headers(),
     {ok, StatusCode, _ResponseHeaders, BodyRef} = hackney:get(Url, Headers),
     {ok, Body} = hackney:body(BodyRef),
@@ -106,8 +126,7 @@ headers() ->
         {<<"Authorization">>, <<"OAuth ", ?TOLOKA_TOKEN/binary>>}
     ].
 
-urlize(Path) ->
-    <<?TOLOKA_BASE_URI/binary, Path/binary>>.
+% Logging
 
 log(String, Args) ->
     io:format(String, Args).
