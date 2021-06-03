@@ -1,5 +1,5 @@
 %%% Manage a collection of ongoing searches.
--module(search_server).
+-module(search_gen_server).
 
 
 % -behaviour(gen_server).
