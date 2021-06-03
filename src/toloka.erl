@@ -3,10 +3,8 @@
 -export([
     search/1,
     check/1,
-    open_pool/1,
+    open_pool/1
     % TODO is_ready
-    get_quotes/1,
-    create_check_task_suite/1
 ]).
 
 -include("http_status_codes.hrl").
@@ -27,13 +25,15 @@ search(Description) ->
     TaskId.
 
 check(SearchTaskId) ->
-    {SearchDescription, Quotes} = get_quotes(SearchTaskId),
-    _DescriptionScreenshots = prepare_check_input(SearchDescription, Quotes).
-    % create_check_task_suite(DescriptionScreenshots).
+    {SearchDescription, Quotes} = get_search_result(SearchTaskId),
+    DescriptionScreenshots = prepare_check_input(SearchDescription, Quotes),
+    create_check_task_suite(DescriptionScreenshots).
 
 open_pool(PoolId) ->
     {?HTTP_STATUS_ACCEPTED, Body} = post(<<"/pools/", PoolId/binary, "/open">>),
     Body.
+
+%%% Private Functions
 
 create_check_task_suite(DescriptionScreenshots) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/task-suites">>, #{
@@ -55,12 +55,8 @@ create_check_task_suite(DescriptionScreenshots) ->
 
 
 
-
-%%% Private Functions
-
-% FIXME rename to include Description
 % TODO count the failed attempts by counting statuses other than ACCEPTED
-get_quotes(SearchTaskId) ->
+get_search_result(SearchTaskId) ->
     % FIXME SUBMITTED vs ACCEPTED
     % {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", TaskId/binary, "&status=SUBMITTED">>),
     {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=ACCEPTED">>),
@@ -106,7 +102,6 @@ get_quotes(SearchTaskId) ->
         {Url2, Price2, Filename2}
     ]}.
 
-%%% Descriptions
 
 prepare_check_input(SearchDescription, Quotes) ->
     [
@@ -115,12 +110,14 @@ prepare_check_input(SearchDescription, Quotes) ->
         || {Url, Price, Screenshot} <- Quotes
     ].
 
+%%% Descriptions
+
 % TODO disarm user input
 % TODO custom description template
 make_check_description(SearchDescription, Url, Price) ->
     lists:flatten(
         io_lib:format(
-            "Являются ли цена ~.2f р., <a href='~ts'>ссылка</a>, и скриншот ответом на задание~n<i>~ts</i>?",
+            "Являются ли цена ~.2f р., <a href='~ts'>ссылка</a>, и скриншот ответом на задание~n~n<i>\"~ts\"</i>?",
             [Price, Url, SearchDescription]
         )
     ).
