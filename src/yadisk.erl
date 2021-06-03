@@ -26,7 +26,8 @@ upload_bytes(Bytes, FileName) ->
     YadiskUrl = hackney_url:make_url(<<"">>, <<"/resources/upload">>,
                                      [ {<<"path">>, Path}, {<<"overwrite">>, true} ]),
     {?HTTP_STATUS_OK, #{<<"href">> := Href, <<"operation_id">> := OperationId}} = get_(YadiskUrl),
-    {ok, ?HTTP_STATUS_CREATED, _ResponseHeaders, _BodyRef} = hackney:put(Href, headers(), Bytes),
+    {ok, ?HTTP_STATUS_CREATED,
+     _ResponseHeaders, _BodyRef} = hackney:put(Href, headers(), Bytes, [{recv_timeout, infinity}]),
     OperationId.
 
 is_uploaded(OperationId) ->

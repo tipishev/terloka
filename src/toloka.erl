@@ -1,11 +1,12 @@
 -module(toloka).
 
 -export([
-    create_search_task/1,
+    search/1,
+    check/1,
     open_pool/1,
+    % TODO is_ready
     get_quotes/1,
-    create_check_task_suite/1,
-    description/4
+    create_check_task_suite/1
 ]).
 
 -include("http_status_codes.hrl").
@@ -16,7 +17,7 @@
 -define(CHECK_POOL_ID, <<"24538798">>).
 
 % TODO create multiple tasks in one request
-create_search_task(Description) ->
+search(Description) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [#{
             input_values => #{description => Description},
             pool_id => ?SEARCH_POOL_ID,
@@ -25,9 +26,15 @@ create_search_task(Description) ->
     #{<<"items">> := #{<<"0">> := #{<<"id">> := TaskId}}} = Body,
     TaskId.
 
+check(SearchTaskId) ->
+    {SearchDescription, Quotes} = get_quotes(SearchTaskId),
+    _DescriptionScreenshots = prepare_check_input(SearchDescription, Quotes).
+    % create_check_task_suite(DescriptionScreenshots).
+
 open_pool(PoolId) ->
     {?HTTP_STATUS_ACCEPTED, Body} = post(<<"/pools/", PoolId/binary, "/open">>),
     Body.
+
 create_check_task_suite(DescriptionScreenshots) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/task-suites">>, #{
         <<"pool_id">> => ?CHECK_POOL_ID,
@@ -35,8 +42,8 @@ create_check_task_suite(DescriptionScreenshots) ->
         <<"tasks">> => [
             #{
                 <<"input_values">> => #{
-                    <<"description">> => Description,
-                    <<"screenshot">> => <<"screenshots/", Screenshot/binary>>
+                    <<"description">> => unicode:characters_to_binary(Description),
+                    <<"screenshot">> => Screenshot
                 }
             }
             || {Description, Screenshot} <- DescriptionScreenshots
@@ -47,11 +54,16 @@ create_check_task_suite(DescriptionScreenshots) ->
     Body.
 
 
+
+
+%%% Private Functions
+
+% FIXME rename to include Description
 % TODO count the failed attempts by counting statuses other than ACCEPTED
-get_quotes(TaskId) ->
+get_quotes(SearchTaskId) ->
     % FIXME SUBMITTED vs ACCEPTED
     % {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", TaskId/binary, "&status=SUBMITTED">>),
-    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", TaskId/binary, "&status=ACCEPTED">>),
+    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=ACCEPTED">>),
     #{
         <<"items">> := [
             #{
@@ -71,28 +83,47 @@ get_quotes(TaskId) ->
                             <<"screenshot-2">> := AttachmentId2
                         }
                     }
+                ],
+                <<"tasks">> := [
+                    #{
+                        <<"input_values">> := #{
+                            <<"description">> := SearchDescription
+                        }
+                    }
                 ]
             }
         ]
     } = Body,
+
+    % TODO move out
     {Filename0, _OperationId0} = copy_to_yadisk(AttachmentId0),
     {Filename1, _OperationId1} = copy_to_yadisk(AttachmentId1),
     {Filename2, _OperationId2} = copy_to_yadisk(AttachmentId2),
-    [
+
+    {SearchDescription, [
         {Url0, Price0, Filename0},
         {Url1, Price1, Filename1},
         {Url2, Price2, Filename2}
-    ].
-
-%%% Private Functions
+    ]}.
 
 %%% Descriptions
 
-% FIXME sanitize user input
-description(Name, _Price, _City, _Url) ->
-    io_lib:format("~p~n", [Name]).
-    % <<Name/utf8, "по цене"/utf8, Price, "р. в городе "/utf8,
-      % City/utf8, "\nНа сайте "/utf8, Url/utf8>>.
+prepare_check_input(SearchDescription, Quotes) ->
+    [
+        {make_check_description(SearchDescription, Url, Price),
+         <<"screenshots/", Screenshot/binary>>}
+        || {Url, Price, Screenshot} <- Quotes
+    ].
+
+% TODO disarm user input
+% TODO custom description template
+make_check_description(SearchDescription, Url, Price) ->
+    lists:flatten(
+        io_lib:format(
+            "Являются ли цена ~.2f р., <a href='~ts'>ссылка</a>, и скриншот ответом на задание~n<i>~ts</i>?",
+            [Price, Url, SearchDescription]
+        )
+    ).
 
 %%% Attachments
 

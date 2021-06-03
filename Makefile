@@ -22,7 +22,7 @@ shell: compile
 	rebar3 shell
 
 auto: compile
-	rebar3 auto
+	ERL_FLAGS="+pc unicode" rebar3 auto
 
 
 release: deps
