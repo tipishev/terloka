@@ -3,7 +3,8 @@
 -export([
     search/1,
     check/1,
-    open_pool/1
+    open_pool/1,
+    get_check_result/1
     % TODO is_ready
 ]).
 
@@ -50,7 +51,7 @@ create_check_task_suite(DescriptionScreenshots) ->
         ]
     }),
 
-    % TODO extract only relevant IDs from the Body
+    % TODO extract CheckTaskSuiteId, and TaskIds
     Body.
 
 
@@ -101,6 +102,49 @@ get_search_result(SearchTaskId) ->
         {Url1, Price1, Filename1},
         {Url2, Price2, Filename2}
     ]}.
+
+get_check_result(CheckTaskSuiteId) ->
+    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_suite_id=", CheckTaskSuiteId/binary, "&status=ACCEPTED">>),
+    #{
+        % when this breaks, we need pagination
+        <<"has_more">> := false,
+        <<"items">> := [
+            #{
+                <<"user_id">> := _UserId1,
+                <<"solutions">> := [
+                    #{<<"output_values">> := #{<<"result">> := Answer1_1}},
+                    #{<<"output_values">> := #{<<"result">> := Answer1_2}},
+                    #{<<"output_values">> := #{<<"result">> := Answer1_3}}
+                ]
+            },
+            #{
+                <<"user_id">> := _UserId2,
+                <<"solutions">> := [
+                    #{<<"output_values">> := #{<<"result">> := Answer2_1}},
+                    #{<<"output_values">> := #{<<"result">> := Answer2_2}},
+                    #{<<"output_values">> := #{<<"result">> := Answer2_3}}
+                ]
+            },
+            #{
+                <<"user_id">> := _UserId3,
+                <<"solutions">> := [
+                    #{<<"output_values">> := #{<<"result">> := Answer3_1}},
+                    #{<<"output_values">> := #{<<"result">> := Answer3_2}},
+                    #{<<"output_values">> := #{<<"result">> := Answer3_3}}
+                ]
+            }
+        ]
+    } = Body,
+    [
+        vote(Answer1_1, Answer2_1, Answer3_1),
+        vote(Answer1_2, Answer2_2, Answer3_2),
+        vote(Answer1_3, Answer2_3, Answer3_3)
+    ].
+
+vote(<<"yes">>, <<"yes">>, _) -> true;
+vote(<<"yes">>, _, <<"yes">>) -> true;
+vote(_, <<"yes">>, <<"yes">>) -> true;
+vote(_, _, _) -> false.
 
 
 prepare_check_input(SearchDescription, Quotes) ->
