@@ -40,14 +40,13 @@
     | wait_search_pool.
 -type quote() :: #quote{}.
 
-
 %%% API
 
 % TODO use Name, City, etc.
 % TODO add budget cap
 % TODO add ReportTo?
 start(Description) ->
-    {ok, Pid} = gen_server:start_link(?MODULE, #state{description=Description}, []),
+    {ok, Pid} = gen_server:start_link(?MODULE, #state{description = Description}, []),
     Pid.
 
 stop(Pid) ->
@@ -58,7 +57,7 @@ status(Pid) ->
 
 %%% OTP Callbacks
 
-init(State=#state{description=Description}) ->
+init(State = #state{description = Description}) ->
     log("I started looking for ~s.", [Description]),
     {ok, State, _Sleep = 3 * ?SECONDS}.
 
@@ -86,13 +85,15 @@ terminate(_Reason, _State) -> ok.
 
 %%% Helpers
 report(#state{current_task = CurrentTask, good_quotes = GoodQuotes, search_expenses = SearchExpenses}) ->
-    lists:flatten(io_lib:format("My task is ~p. Found ~p quotes. Spent ~p searches.", [
-        CurrentTask,
-        length(GoodQuotes),
-        SearchExpenses
-    ])).
+    lists:flatten(
+        io_lib:format("My task is ~p. Found ~p quotes. Spent ~p searches.", [
+            CurrentTask,
+            length(GoodQuotes),
+            SearchExpenses
+        ])
+    ).
 
 % Logging
 % TODO real logging
 log(String) -> log(String, []).
-log(String, Args) -> io:format("~p: " ++ String ++ "~n", [self()| Args]).
+log(String, Args) -> io:format("~p: " ++ String ++ "~n", [self() | Args]).
