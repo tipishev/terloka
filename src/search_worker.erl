@@ -65,7 +65,7 @@ init(Description) ->
     log("I started looking for ~ts.", [Description]),
     SleepTime = 3 * ?SECONDS,
     NextWakeup = future(SleepTime),
-    log("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div 1000]),
+    log("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     State = #state{description = Description, next_wakeup=NextWakeup},
     {ok, State, _SleepTime = SleepTime}.
 
@@ -75,7 +75,7 @@ handle_call(stop, _From, State) ->
 handle_call(status, _From, State = #state{next_wakeup=NextWakeup}) ->
     log("Oh.. boss wants to know it all."),
     SleepTime = max(1000 * seconds_until(NextWakeup), 3000),
-    log("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div 1000]),
+    log("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     {reply, state_to_dict(State), State, SleepTime};
 handle_call(pause, _From, State) ->
     log("Ok, I will chill."),
@@ -102,7 +102,7 @@ handle_info(timeout,
     log("Ok, created (id: ~p)", [SearchId]),
     SleepTime = 1 * ?MINUTES,
     NextWakeup = future(SleepTime),
-    log("Will check it at ~p. (~p seconds)", [NextWakeup, SleepTime div 1000]),
+    log("Will check it at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     NewState = State#state{current_task=expect_search,
                            searches_left=SearchesLeft - 1,
                            search_id=SearchId,
@@ -115,10 +115,10 @@ handle_info(timeout, State = #state{current_task = expect_search, search_id = Se
     IsSearchReady = toloka:is_search_ready(SearchId),
     case IsSearchReady of
         true ->
-            log("Hooray, it's ready"),
+            log("Hooray, it's ready!"),
             SleepTime = 3 * ?SECONDS,
             NextWakeup = future(SleepTime),
-            log("I'll check it at ~p. (~p seconds)", [NextWakeup, SleepTime div 1000]),
+            log("I'll check it at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{current_task=create_check,
                                    search_id=undefined,
                                    next_wakeup=NextWakeup},
@@ -127,15 +127,15 @@ handle_info(timeout, State = #state{current_task = expect_search, search_id = Se
             log("Search is not ready yet..."),
             SleepTime = 1 * ?MINUTES,
             NextWakeup = future(SleepTime),
-            log("Will check it again at ~p. (~p seconds)", [NextWakeup, SleepTime div 1000]),
+            log("Will check it again at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{next_wakeup=NextWakeup},
             {noreply, NewState, _SleepTime = SleepTime}
     end;
 
 handle_info(timeout, State) ->
-        log("I don't know what to do :("),
+    log("I don't know what to do :("),
     {noreply, State, _SleepTime = 10 * ?SECONDS}.
-% don't handle info messages other than timeout
+% don't handle info messages other than timeout, otherwise we make a zombie.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -174,9 +174,12 @@ seconds_until(Future) ->
     FutureSeconds - NowSeconds.
 
 future(MilliSecondsFromNow) ->
+    SecondsFromNow = MilliSecondsFromNow div ?SECONDS,
     calendar:gregorian_seconds_to_datetime(
-      calendar:datetime_to_gregorian_seconds(
-        calendar:local_time()) + MilliSecondsFromNow div 1000).
+        calendar:datetime_to_gregorian_seconds(
+            calendar:local_time()
+        ) + SecondsFromNow
+    ).
 
 % Logging
 % TODO use real logging

@@ -23,7 +23,7 @@ search(Description) ->
             overlap => 1
         }]),
     #{<<"items">> := #{<<"0">> := #{<<"id">> := TaskId}}} = Body,
-    open_pool(?SEARCH_POOL_ID),
+    % open_pool(?SEARCH_POOL_ID),
     TaskId.
 
 is_search_ready(SearchTaskId) ->
