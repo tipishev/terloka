@@ -2,6 +2,7 @@
 
 -export([
     search/1,
+    is_search_ready/1,
     check/1,
     get_check_result/1
     % TODO is_ready
@@ -24,6 +25,14 @@ search(Description) ->
     #{<<"items">> := #{<<"0">> := #{<<"id">> := TaskId}}} = Body,
     open_pool(?SEARCH_POOL_ID),
     TaskId.
+
+is_search_ready(SearchTaskId) ->
+    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=SUBMITTED">>),
+    #{<<"items">> := SubmittedAssignments} = Body,
+    case SubmittedAssignments of
+        [] -> false;
+        [_SubmittedAssignment] -> true
+    end.
 
 check(SearchTaskId) ->
     {SearchDescription, Quotes} = get_search_result(SearchTaskId),
@@ -224,4 +233,5 @@ headers() ->
 % Logging
 
 % TODO real logging
-log(String, Args) -> io:format(String, Args).
+log(String) -> log(String, []).
+log(String, Args) -> io:format("~p: " ++ String ++ "~n", [self() | Args]).
