@@ -13,19 +13,16 @@
 -record(state, {
     % Constants
     description :: binary(),
-    search_pool_id = <<"23077202">> :: binary(),
-    check_pool_id = <<"24538798">> :: binary(),
     minimal_quotes = 5 :: non_neg_integer(),
-    search_budget = 3 :: non_neg_integer(),
 
     % Variables
-    search_expenses = 0 :: non_neg_integer(),
-    current_task = create_search_pool :: current_task(),
-    search_task_id = undefined :: undefined | binary(),
-    check_task_suite_id = undefined :: undefined | binary(),
+    searches_left = 3 :: non_neg_integer(),
+    current_task = create_search :: current_task(),
+    search_id = undefined :: undefined | binary(),
+    check_id = undefined :: undefined | binary(),
 
     % Result
-    good_quotes = [] :: [quote()]
+    quotes = [] :: [quote()]
 }).
 
 -record(quote, {
@@ -36,8 +33,8 @@
 }).
 
 -type current_task() ::
-    create_search_pool
-    | wait_search_pool.
+    create_search
+    | expect_search.
 -type quote() :: #quote{}.
 
 %%% API
@@ -58,23 +55,34 @@ status(Pid) ->
 %%% OTP Callbacks
 
 init(State = #state{description = Description}) ->
-    log("I started looking for ~s.", [Description]),
+    log("I started looking for ~ts.", [Description]),
     {ok, State, _Sleep = 3 * ?SECONDS}.
 
 handle_call(stop, _From, State) ->
     log("I am stopping."),
     {stop, normal, ok, State};
 handle_call(status, _From, State) ->
-    log("Oh, boss calling."),
+    log("Oh.. boss wants to know it all."),
     {reply, report(State), State, 3 * ?SECONDS};
 handle_call(_Mst, _From, State) ->
+    log("Hm.. unknown call, ignore."),
     {noreply, State}.
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+handle_info(timeout,
+            State = #state{current_task = create_search,
+                           searches_left = SearchesLeft,
+                           description = Description}) when SearchesLeft > 0 ->
+    log("I woke up to create a search pool"),
+    SearchId = toloka:search(Description),
+    NewState = State#state{current_task=expect_search,
+                           searches_left=SearchesLeft - 1,
+                           search_id=SearchId},
+    {noreply, NewState, _Sleep = 2 * ?SECONDS};
 handle_info(timeout, State) ->
-    log("I woke up."),
+        log("I woke up and don't know what to do :("),
     {noreply, State, _Sleep = 2 * ?SECONDS}.
 % don't handle info messages other than timeout
 
@@ -84,14 +92,25 @@ code_change(_OldVsn, State, _Extra) ->
 terminate(_Reason, _State) -> ok.
 
 %%% Helpers
-report(#state{current_task = CurrentTask, good_quotes = GoodQuotes, search_expenses = SearchExpenses}) ->
-    lists:flatten(
-        io_lib:format("My task is ~p. Found ~p quotes. Spent ~p searches.", [
-            CurrentTask,
-            length(GoodQuotes),
-            SearchExpenses
-        ])
-    ).
+
+report(#state{
+    description = Description,
+    minimal_quotes = MinimalQuotes,
+    searches_left = SearchesLeft,
+    current_task = CurrentTask,
+    search_id = SearchId,
+    check_id = CheckId,
+    quotes = Quotes
+}) ->
+    #{
+        description => Description,
+        minimal_quotes => MinimalQuotes,
+        searches_left => SearchesLeft,
+        current_task => CurrentTask,
+        search_id => SearchId,
+        check_id => CheckId,
+        quotes => Quotes
+    }.
 
 % Logging
 % TODO real logging

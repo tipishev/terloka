@@ -3,7 +3,6 @@
 -export([
     search/1,
     check/1,
-    open_pool/1,
     get_check_result/1
     % TODO is_ready
 ]).
@@ -23,6 +22,7 @@ search(Description) ->
             overlap => 1
         }]),
     #{<<"items">> := #{<<"0">> := #{<<"id">> := TaskId}}} = Body,
+    open_pool(?SEARCH_POOL_ID),
     TaskId.
 
 check(SearchTaskId) ->
@@ -50,6 +50,7 @@ create_check_task_suite(DescriptionScreenshots) ->
             || {Description, Screenshot} <- DescriptionScreenshots
         ]
     }),
+    open_pool(?CHECK_POOL_ID),
 
     % TODO extract CheckTaskSuiteId, and TaskIds
     Body.
