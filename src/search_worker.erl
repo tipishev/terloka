@@ -7,24 +7,38 @@
 
 -define(SECONDS, 1000).
 
+%%% Types
+
 % copied from Search Sheet in README.MD
 -record(state, {
     % Constants
-    description,
-    search_pool_id = <<"23077202">>,
-    check_pool_id = <<"24538798">>,
-    minimal_quotes = 5,
-    search_budget = 3,
+    description :: binary(),
+    search_pool_id = <<"23077202">> :: binary(),
+    check_pool_id = <<"24538798">> :: binary(),
+    minimal_quotes = 5 :: non_neg_integer(),
+    search_budget = 3 :: non_neg_integer(),
 
     % Variables
-    search_expenses = 0,
-    current_task = create_search_pool,
-    search_task_id = undefined,
-    check_task_suite_id = undefined,
+    search_expenses = 0 :: non_neg_integer(),
+    current_task = create_search_pool :: current_task(),
+    search_task_id = undefined :: undefined | binary(),
+    check_task_suite_id = undefined :: undefined | binary(),
 
     % Result
-    good_quotes = []
+    good_quotes = [] :: [quote()]
 }).
+
+-record(quote, {
+    url :: binary(),
+    % TODO non_neg_integer kopeyks
+    price :: number(),
+    screenshot :: binary()
+}).
+
+-type current_task() ::
+    create_search_pool
+    | wait_search_pool.
+-type quote() :: #quote{}.
 
 
 %%% API
@@ -52,7 +66,7 @@ handle_call(stop, _From, State) ->
     log("I am stopping."),
     {stop, normal, ok, State};
 handle_call(status, _From, State) ->
-    log("Oh, an email from boss."),
+    log("Oh, boss calling."),
     {reply, report(State), State, 3 * ?SECONDS};
 handle_call(_Mst, _From, State) ->
     {noreply, State}.
@@ -72,7 +86,7 @@ terminate(_Reason, _State) -> ok.
 
 %%% Helpers
 report(#state{current_task = CurrentTask, good_quotes = GoodQuotes, search_expenses = SearchExpenses}) ->
-    lists:flatten(io_lib:format("My task is ~p. I have found ~p quotes. spent ~p searches.", [
+    lists:flatten(io_lib:format("My task is ~p. Found ~p quotes. Spent ~p searches.", [
         CurrentTask,
         length(GoodQuotes),
         SearchExpenses

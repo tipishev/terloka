@@ -24,7 +24,6 @@ shell: compile
 auto: compile
 	ERL_FLAGS="+pc unicode" rebar3 auto
 
-
 release: deps
 	rebar3 release
 
@@ -41,3 +40,7 @@ docker-up:
 
 docker-down:
 	docker-compose down
+
+dialyze:
+	rebar3 dialyzer
+
