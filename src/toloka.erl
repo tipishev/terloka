@@ -4,8 +4,8 @@
     search/1,
     is_search_ready/1,
     check/1,
-    get_check_result/1
     % TODO is_check_ready/1
+    get_check_result/1
 ]).
 
 -include("http_status_codes.hrl").
