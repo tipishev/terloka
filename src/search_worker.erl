@@ -22,10 +22,9 @@
     toloka_search_id = undefined :: undefined | binary(),
     toloka_check_id = undefined :: undefined | binary(),
     next_wakeup :: calendar:date_time(),
-    raw_quotes = [] :: [quote()],
 
     % Result
-    good_quotes = [] :: [quote()]
+    quotes = [] :: [quote()]
 }).
 
 -record(quote, {
@@ -194,8 +193,7 @@ state_to_map(#state{
     toloka_search_id = TolokaSearchId,
     toloka_check_id = TolokaCheckId,
     next_wakeup = NextWakeup,
-    raw_quotes = RawQuotes,
-    good_quotes = GoodQuotes
+    quotes = Quotes
 }) ->
     #{
         description => Description,
@@ -205,8 +203,7 @@ state_to_map(#state{
         toloka_search_id => TolokaSearchId,
         toloka_check_id => TolokaCheckId,
         next_wakeup => NextWakeup,
-        raw_quotes => RawQuotes,
-        good_quotes => GoodQuotes
+        quotes => Quotes
     }.
 
 % TODO map_to_state()
