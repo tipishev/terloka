@@ -36,8 +36,14 @@
 }).
 
 -type current_task() ::
+    % intermediate states
     create_toloka_search
-    | expect_toloka_search.
+    | expect_toloka_search
+    | create_toloka_check
+    | expect_toloka_check
+    % final states
+    | success
+    | fail.
 -type quote() :: #quote{}.
 
 %%% API
@@ -55,6 +61,7 @@ stop(Pid) ->
 pause(Pid) ->
     gen_server:call(Pid, pause).
 
+% also acts as resume the pause
 status(Pid) ->
     gen_server:call(Pid, status).
 
@@ -81,7 +88,7 @@ handle_call(pause, _From, State) ->
     % note the absence of Timeout
     {reply, ok, State};
 handle_call(_Mst, _From, State) ->
-    log("Hm.. unknown call, ignoring."),
+    log("Hm.. unknown call, I am ignoring it."),
     {noreply, State}.
 
 handle_cast(_Msg, State) ->
@@ -129,14 +136,14 @@ handle_info(
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
             SleepTime = 1 * ?MINUTES,
             NextWakeup = future(SleepTime),
-            log("Will check it again at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+            log("I will check it again at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{current_task = expect_toloka_search, next_wakeup = NextWakeup},
             {noreply, NewState, _SleepTime = SleepTime};
         true ->
             log("Hooray, it's ready!"),
             SleepTime = 3 * ?SECONDS,
             NextWakeup = future(SleepTime),
-            log("I'll check it at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+            log("I will create a check at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{
                 current_task = create_toloka_check,
                 next_wakeup = NextWakeup
@@ -169,7 +176,6 @@ handle_info(
 handle_info(timeout, State) ->
     log("I don't know what to do :("),
     {noreply, State, _SleepTime = 10 * ?SECONDS}.
-% don't handle info messages other than timeout, otherwise we make a zombie.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -178,6 +184,8 @@ terminate(_Reason, _State) -> ok.
 
 %%% Helpers
 
+% TODO use it to make snapshots
+% TODO make an invese to load from snapshots
 state_to_map(#state{
     description = Description,
     quotes_required = QuotesRequired,
