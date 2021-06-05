@@ -53,7 +53,11 @@ create_check_task_suite(DescriptionScreenshots) ->
             #{
                 <<"input_values">> => #{
                     <<"description">> => unicode:characters_to_binary(Description),
-                    <<"screenshot">> => Screenshot
+                    <<"screenshot">> => Screenshot,
+
+                    % keep for context
+                    <<"url">> => Url,
+                    <<"price">> => Price
                 }
             }
             || {Description, Screenshot} <- DescriptionScreenshots
