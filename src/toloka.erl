@@ -4,7 +4,10 @@
     search/1,
     is_search_ready/1,
     check/1,
-    % TODO is_check_ready/1
+    % TODO combine create check and get results?
+    is_check_ready/1,
+    % TODO accept_search/1
+    % TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
     get_check_result/1
 ]).
 
@@ -13,7 +16,7 @@
 -define(TOLOKA_BASE_URI, <<"https://toloka.yandex.ru/api/v1">>).
 -define(TOLOKA_TOKEN, <<"AQAAAAAZfxSeAACtpcBhALKZ7k7YjgKe9rNIu5s">>).
 -define(SEARCH_POOL_ID, <<"23077202">>).
--define(CHECK_POOL_ID, <<"24538798">>).
+-define(CHECK_POOL_ID, <<"24743282">>).
 
 % TODO create multiple tasks in one request
 search(Description) ->
@@ -23,29 +26,43 @@ search(Description) ->
             overlap => 1
         }]),
     #{<<"items">> := #{<<"0">> := #{<<"id">> := TaskId}}} = Body,
-    % open_pool(?SEARCH_POOL_ID),
+    open_pool(?SEARCH_POOL_ID),
     TaskId.
 
 is_search_ready(SearchTaskId) ->
-    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=SUBMITTED">>),
-    #{<<"items">> := SubmittedAssignments} = Body,
+    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary,
+                                     % "&status=ACCEPTED">>),
+                                     "&status=SUBMITTED">>),
+    % implement pagination when this breaks
+    #{<<"has_more">> := false,
+      <<"items">> := SubmittedAssignments} = Body,
     case SubmittedAssignments of
-        [] -> false;
-        [_SubmittedAssignment] -> true
+        [_|_] -> true;
+        [] -> false
+    end.
+
+is_check_ready(CheckTaskSuiteId) ->
+    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_suite_id=", CheckTaskSuiteId/binary,
+                                     "&status=ACCEPTED">>),
+    % implement pagination when this breaks
+    #{<<"has_more">> := false,
+      <<"items">> := Answers} = Body,
+    case Answers of
+        [_|_] -> true;
+        [] -> false
     end.
 
 check(SearchTaskId) ->
     {SearchDescription, Quotes} = get_search_result(SearchTaskId),
-    DescriptionScreenshots = prepare_check_input(SearchDescription, Quotes),
-    create_check_task_suite(DescriptionScreenshots).
+    CheckInput = prepare_check_input(SearchDescription, Quotes),
+    create_check_task_suite(CheckInput).
 
 open_pool(PoolId) ->
-    {?HTTP_STATUS_ACCEPTED, Body} = post(<<"/pools/", PoolId/binary, "/open">>),
-    Body.
+    {?HTTP_STATUS_ACCEPTED, _Body} = post(<<"/pools/", PoolId/binary, "/open">>).
 
 %%% Private Functions
 
-create_check_task_suite(DescriptionScreenshots) ->
+create_check_task_suite(CheckInput) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/task-suites">>, #{
         <<"pool_id">> => ?CHECK_POOL_ID,
         <<"overlap">> => 3,
@@ -60,14 +77,17 @@ create_check_task_suite(DescriptionScreenshots) ->
                     <<"price">> => Price
                 }
             }
-            || {Description, Screenshot} <- DescriptionScreenshots
+            || #{description := Description,
+                 screenshot :=  Screenshot,
+                 url := Url,
+                 price := Price} <- CheckInput
         ]
     }),
+
     open_pool(?CHECK_POOL_ID),
 
-    % TODO extract CheckTaskSuiteId, and TaskIds
-    Body.
-
+    #{<<"id">> := TaskSuiteId} = Body,
+    TaskSuiteId.
 
 
 % TODO count the failed attempts by counting statuses other than ACCEPTED
@@ -129,8 +149,32 @@ get_check_result(CheckTaskSuiteId) ->
                     #{<<"output_values">> := #{<<"result">> := Answer1_1}},
                     #{<<"output_values">> := #{<<"result">> := Answer1_2}},
                     #{<<"output_values">> := #{<<"result">> := Answer1_3}}
+                ],
+                <<"tasks">> := [
+                        #{
+                            <<"input_values">> := #{
+                                <<"url">> := Url1,
+                                <<"price">> := Price1,
+                                <<"screenshot">> := Screenshot1
+                            }
+                        },
+                        #{
+                            <<"input_values">> := #{
+                                <<"url">> := Url2,
+                                <<"price">> := Price2,
+                                <<"screenshot">> := Screenshot2
+                            }
+                        },
+                        #{
+                            <<"input_values">> := #{
+                                <<"url">> := Url3,
+                                <<"price">> := Price3,
+                                <<"screenshot">> := Screenshot3
+                            }
+                        }
                 ]
             },
+
             #{
                 <<"user_id">> := _UserId2,
                 <<"solutions">> := [
@@ -149,22 +193,36 @@ get_check_result(CheckTaskSuiteId) ->
             }
         ]
     } = Body,
-    [
+
+    Votes = [
         vote(Answer1_1, Answer2_1, Answer3_1),
         vote(Answer1_2, Answer2_2, Answer3_2),
         vote(Answer1_3, Answer2_3, Answer3_3)
-    ].
+    ],
 
+    Quotes = [
+     {Price1, Url1, Screenshot1},
+     {Price2, Url2, Screenshot2},
+     {Price3, Url3, Screenshot3}
+    ],
+
+    [Quote || {Quote, Vote} <- lists:zip(Quotes, Votes), Vote =:= true].
+
+
+% TODO just use https://yandex.ru/support/toloka-requester/concepts/mvote.html
 vote(<<"yes">>, <<"yes">>, _) -> true;
 vote(<<"yes">>, _, <<"yes">>) -> true;
 vote(_, <<"yes">>, <<"yes">>) -> true;
 vote(_, _, _) -> false.
 
-
 prepare_check_input(SearchDescription, Quotes) ->
     [
-        {make_check_description(SearchDescription, Url, Price),
-         <<"screenshots/", Screenshot/binary>>}
+        #{
+            description => make_check_description(SearchDescription, Url, Price),
+            screenshot => <<"screenshots/", Screenshot/binary>>,
+            url => Url,
+            price => Price
+        }
         || {Url, Price, Screenshot} <- Quotes
     ].
 
