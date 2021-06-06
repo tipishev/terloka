@@ -18,12 +18,13 @@
 
     % Variables
     searches_left = 3 :: non_neg_integer(),
-    current_task = create_toloka_search :: current_task(),
+    current_task :: current_task(),
     toloka_search_id = undefined :: undefined | binary(),
     toloka_check_id = undefined :: undefined | binary(),
     next_wakeup :: calendar:date_time(),
+    % TODO last_wait_time, max_wait_time
 
-    % Result
+    % Result, they are all good.
     quotes = [] :: [quote()]
 }).
 
@@ -51,7 +52,8 @@
 % TODO add budget cap
 % TODO add ReportTo?
 start(Description) ->
-    {ok, Pid} = gen_server:start_link(?MODULE, Description, []),
+    State = #state{description = Description, current_task = create_toloka_search},
+    {ok, Pid} = gen_server:start_link(?MODULE, State, []),
     Pid.
 
 stop(Pid) ->
@@ -66,24 +68,25 @@ status(Pid) ->
 
 %%% OTP Callbacks
 
-init(Description) ->
-    log("I started looking for ~ts.", [Description]),
+% I initialize with state rather than description to enable loading state later.
+init(State = #state{description = Description, quotes_required = QuotesRequired}) ->
+   log("My goal is to find ~p quotes for \"~ts\".", [QuotesRequired, Description]),
     SleepTime = 3 * ?SECONDS,
     NextWakeup = future(SleepTime),
     log("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
-    State = #state{description = Description, next_wakeup = NextWakeup},
-    {ok, State, _SleepTime = SleepTime}.
+    NewState = State#state{next_wakeup = NextWakeup},
+    {ok, NewState, _SleepTime = SleepTime}.
 
 handle_call(stop, _From, State) ->
     log("I am stopping."),
     {stop, normal, ok, State};
 handle_call(status, _From, State = #state{next_wakeup = NextWakeup}) ->
-    log("Oh.. boss wants to know it all."),
+    log("Got request for status"),
     SleepTime = max(milliseconds_until(NextWakeup), 3000),
     log("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     {reply, state_to_map(State), State, SleepTime};
 handle_call(pause, _From, State) ->
-    log("Ok, I will chill."),
+    log("Ok, I take a break."),
     % note the absence of Timeout
     {reply, ok, State};
 handle_call(_Mst, _From, State) ->
@@ -166,12 +169,12 @@ handle_info(
     NewState = State#state{
         current_task = expect_check,
         toloka_check_id = TolokaCheckId,
-        % don't need it, so reset.
+        % don't need it anymore, so reset.
         toloka_search_id = undefined,
         next_wakeup = NextWakeup
     },
     {noreply, NewState, _SleepTime = SleepTime};
-%% Default
+%% Catch-all
 handle_info(timeout, State) ->
     log("I don't know what to do :("),
     {noreply, State, _SleepTime = 10 * ?SECONDS}.
