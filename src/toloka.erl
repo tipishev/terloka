@@ -4,11 +4,12 @@
     search/1,
     is_search_ready/1,
     check/1,
-    % TODO combine create check and get results?
-    is_check_ready/1,
+
+    % TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
+    is_check_ready/1, get_quotes/1
+
     % TODO accept_search/1
     % TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
-    get_check_result/1
 ]).
 
 -include("http_status_codes.hrl").
@@ -16,7 +17,7 @@
 -define(TOLOKA_BASE_URI, <<"https://toloka.yandex.ru/api/v1">>).
 -define(TOLOKA_TOKEN, <<"AQAAAAAZfxSeAACtpcBhALKZ7k7YjgKe9rNIu5s">>).
 -define(SEARCH_POOL_ID, <<"23077202">>).
--define(CHECK_POOL_ID, <<"24743282">>).
+-define(CHECK_POOL_ID, <<"24748405">>).
 
 % TODO create multiple tasks in one request
 search(Description) ->
@@ -53,19 +54,26 @@ is_check_ready(CheckTaskSuiteId) ->
     end.
 
 check(SearchTaskId) ->
-    {SearchDescription, Quotes} = get_search_result(SearchTaskId),
-    CheckInput = prepare_check_input(SearchDescription, Quotes),
+    % FIXME adapt to map
+    SearchResult = get_search_result(SearchTaskId),
+    % FIXME inject user_id and assignment_id
+    CheckInput = prepare_check_input(SearchResult),
     create_check_task_suite(CheckInput).
 
 open_pool(PoolId) ->
-    {?HTTP_STATUS_ACCEPTED, _Body} = post(<<"/pools/", PoolId/binary, "/open">>).
+    PoolId.
+    % FIXME
+    % {?HTTP_STATUS_ACCEPTED, _Body} = post(<<"/pools/", PoolId/binary, "/open">>).
 
 %%% Private Functions
 
 create_check_task_suite(CheckInput) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/task-suites">>, #{
         <<"pool_id">> => ?CHECK_POOL_ID,
+
+        % TODO check if necessary given pool overlap settings
         <<"overlap">> => 3,
+
         <<"tasks">> => [
             #{
                 <<"input_values">> => #{
@@ -74,13 +82,18 @@ create_check_task_suite(CheckInput) ->
 
                     % keep for context
                     <<"url">> => Url,
-                    <<"price">> => Price
+                    <<"price">> => Price,
+                    <<"assignment_id">> => AssignmentId,
+                    <<"user_id">> => UserId
                 }
             }
             || #{description := Description,
                  screenshot :=  Screenshot,
                  url := Url,
-                 price := Price} <- CheckInput
+                 price := Price,
+                 assignment_id := AssignmentId,
+                 user_id := UserId
+                } <- CheckInput
         ]
     }),
 
@@ -98,6 +111,8 @@ get_search_result(SearchTaskId) ->
     #{
         <<"items">> := [
             #{
+                <<"id">> := AssignmentId,
+                <<"user_id">> := UserId,
                 <<"solutions">> := [
                     #{
                         <<"output_values">> := #{
@@ -118,7 +133,7 @@ get_search_result(SearchTaskId) ->
                 <<"tasks">> := [
                     #{
                         <<"input_values">> := #{
-                            <<"description">> := SearchDescription
+                            <<"description">> := Description
                         }
                     }
                 ]
@@ -130,14 +145,34 @@ get_search_result(SearchTaskId) ->
     {Filename0, _OperationId0} = copy_to_yadisk(AttachmentId0),
     {Filename1, _OperationId1} = copy_to_yadisk(AttachmentId1),
     {Filename2, _OperationId2} = copy_to_yadisk(AttachmentId2),
+    % Filename0 = AttachmentId0,
+    % Filename1 = AttachmentId1,
+    % Filename2 = (AttachmentId2),
 
-    {SearchDescription, [
-        {Url0, Price0, Filename0},
-        {Url1, Price1, Filename1},
-        {Url2, Price2, Filename2}
-    ]}.
+    #{
+        description => Description,
+        quotes => [
+            #{
+                url => Url0,
+                price => Price0,
+                filename => Filename0
+            },
+            #{
+                url => Url1,
+                price => Price1,
+                filename => Filename1
+            },
+            #{
+                url => Url2,
+                price => Price2,
+                filename => Filename2
+            }
+        ],
+        assignment_id => AssignmentId,
+        user_id => UserId
+    }.
 
-get_check_result(CheckTaskSuiteId) ->
+get_quotes(CheckTaskSuiteId) ->
     {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_suite_id=", CheckTaskSuiteId/binary, "&status=ACCEPTED">>),
     #{
         % when this breaks, we need pagination
@@ -206,6 +241,8 @@ get_check_result(CheckTaskSuiteId) ->
      {Price3, Url3, Screenshot3}
     ],
 
+    % TODO do rewarding here
+
     [Quote || {Quote, Vote} <- lists:zip(Quotes, Votes), Vote =:= true].
 
 
@@ -215,15 +252,27 @@ vote(<<"yes">>, _, <<"yes">>) -> true;
 vote(_, <<"yes">>, <<"yes">>) -> true;
 vote(_, _, _) -> false.
 
-prepare_check_input(SearchDescription, Quotes) ->
+prepare_check_input(SearchResult) ->
+    #{
+      description := SearchDescription,
+      quotes := Quotes,
+
+      assignment_id := AssignmentId,
+      user_id := UserId
+     } = SearchResult,
     [
         #{
+            % payload
             description => make_check_description(SearchDescription, Url, Price),
-            screenshot => <<"screenshots/", Screenshot/binary>>,
+            screenshot => <<"screenshots/", Filename/binary>>,
+
+            % context
             url => Url,
-            price => Price
+            price => Price,
+            assignment_id => AssignmentId,
+            user_id => UserId
         }
-        || {Url, Price, Screenshot} <- Quotes
+        || #{url := Url, price := Price, filename := Filename} <- Quotes
     ].
 
 %%% Descriptions
