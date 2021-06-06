@@ -2,7 +2,7 @@
 
 -behaviour(gen_server).
 
--export([start/1, stop/1, pause/1, status/1]).
+-export([start/1, load/1, stop/1, pause/1, status/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 
 -define(SECONDS, 1000).
@@ -53,6 +53,11 @@
 % TODO add ReportTo?
 start(Description) ->
     State = #state{description = Description, current_task = create_toloka_search},
+    {ok, Pid} = gen_server:start_link(?MODULE, State, []),
+    Pid.
+
+load(StateMap) ->
+    State = map_to_state(StateMap),
     {ok, Pid} = gen_server:start_link(?MODULE, State, []),
     Pid.
 
@@ -187,7 +192,6 @@ terminate(_Reason, _State) -> ok.
 %%% Helpers
 
 % TODO use it to make snapshots
-% TODO make an invese to load from snapshots
 state_to_map(#state{
     description = Description,
     quotes_required = QuotesRequired,
@@ -207,6 +211,27 @@ state_to_map(#state{
         toloka_check_id => TolokaCheckId,
         next_wakeup => NextWakeup,
         quotes => Quotes
+    }.
+
+map_to_state(#{
+    description := Description,
+    quotes_required := QuotesRequired,
+    searches_left := SearchesLeft,
+    current_task := CurrentTask,
+    toloka_search_id := TolokaSearchId,
+    toloka_check_id := TolokaCheckId,
+    next_wakeup := NextWakeup,
+    quotes := Quotes
+}) ->
+    #state{
+        description = Description,
+        quotes_required = QuotesRequired,
+        searches_left = SearchesLeft,
+        current_task = CurrentTask,
+        toloka_search_id = TolokaSearchId,
+        toloka_check_id = TolokaCheckId,
+        next_wakeup = NextWakeup,
+        quotes = Quotes
     }.
 
 % TODO map_to_state()

@@ -1,14 +1,14 @@
 -module(toloka).
 
-% -compile(export_all).
--export([
-    search/1, is_search_ready/1,
+-compile(export_all).
+% -export([
+    % search/1, is_search_ready/1,
 
-    % TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
-    check/1, is_check_ready/1, get_quotes/1
+    %% TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
+    % check/1, is_check_ready/1, get_quotes/1
 
-    % TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
-]).
+    %% TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
+% ]).
 
 -include("http_status_codes.hrl").
 
@@ -58,8 +58,11 @@ is_check_ready(CheckTaskSuiteId) ->
     end.
 
 open_pool(PoolId) ->
-    % {ignored, PoolId}.
-    {?HTTP_STATUS_ACCEPTED, _Body} = post(<<"/pools/", PoolId/binary, "/open">>).
+    Response = post(<<"/pools/", PoolId/binary, "/open">>),
+    case Response of
+        {?HTTP_STATUS_ACCEPTED, _Body} -> ok;
+        {?HTTP_STATUS_NO_CONTENT, empty} -> ok
+    end.
 
 %%% Private Functions
 
@@ -102,8 +105,8 @@ create_check_task_suite(CheckInput) ->
 % TODO count the failed attempts by counting statuses other than ACCEPTED
 get_search_result(SearchTaskId) ->
     % FIXME SUBMITTED vs ACCEPTED
-    % {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", TaskId/binary, "&status=SUBMITTED">>),
-    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=ACCEPTED">>),
+    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=SUBMITTED">>),
+    % {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=ACCEPTED">>),
     #{
         <<"items">> := [
             #{
@@ -339,7 +342,10 @@ post(Path, Json) ->
     Payload = jsx:encode(Json),
     {ok, StatusCode, _ResponseHeaders, BodyRef} = hackney:post(Url, Headers, Payload),
     {ok, Body} = hackney:body(BodyRef),
-    {StatusCode, jsx:decode(Body, [return_maps])}.
+    case Body of
+        <<>> -> {StatusCode, empty};
+        _ -> {StatusCode, jsx:decode(Body, [return_maps])}
+    end.
 
 patch(Path, Json) ->
     Url = urlize(Path),
