@@ -1,16 +1,15 @@
 -module(toloka).
 
--export([
-    search/1,
-    is_search_ready/1,
-    check/1,
+-compile(export_all).
+% -export([
+%     search/1, is_search_ready/1,
 
-    % TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
-    is_check_ready/1, get_quotes/1
+%     % TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
+%     check/1, is_check_ready/1, get_quotes/1
 
-    % TODO accept_search/1
-    % TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
-]).
+%     % TODO accept_search/1
+%     % TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
+% ]).
 
 -include("http_status_codes.hrl").
 
@@ -21,35 +20,26 @@
 
 % TODO create multiple tasks in one request
 search(Description) ->
-    {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [#{
+    {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [
+        #{
             input_values => #{description => Description},
             pool_id => ?SEARCH_POOL_ID,
             overlap => 1
-        }]),
+        }
+    ]),
     #{<<"items">> := #{<<"0">> := #{<<"id">> := TaskId}}} = Body,
     open_pool(?SEARCH_POOL_ID),
     TaskId.
 
 is_search_ready(SearchTaskId) ->
-    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary,
-                                     % "&status=ACCEPTED">>),
-                                     "&status=SUBMITTED">>),
-    % implement pagination when this breaks
-    #{<<"has_more">> := false,
-      <<"items">> := SubmittedAssignments} = Body,
+    {?HTTP_STATUS_OK, Body} = get_(
+        <<"/assignments?task_id=", SearchTaskId/binary,
+            % "&status=ACCEPTED">>),
+            "&status=SUBMITTED">>
+    ),
+    SubmittedAssignments = fake_unpaginate(Body),
     case SubmittedAssignments of
-        [_|_] -> true;
-        [] -> false
-    end.
-
-is_check_ready(CheckTaskSuiteId) ->
-    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_suite_id=", CheckTaskSuiteId/binary,
-                                     "&status=ACCEPTED">>),
-    % implement pagination when this breaks
-    #{<<"has_more">> := false,
-      <<"items">> := Answers} = Body,
-    case Answers of
-        [_|_] -> true;
+        [_ | _] -> true;
         [] -> false
     end.
 
@@ -60,10 +50,17 @@ check(SearchTaskId) ->
     CheckInput = prepare_check_input(SearchResult),
     create_check_task_suite(CheckInput).
 
+is_check_ready(CheckTaskSuiteId) ->
+    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_suite_id=", CheckTaskSuiteId/binary, "&status=ACCEPTED">>),
+    Answers = fake_unpaginate(Body),
+    case Answers of
+        [_ | _] -> true;
+        [] -> false
+    end.
+
 open_pool(PoolId) ->
-    PoolId.
-    % FIXME
-    % {?HTTP_STATUS_ACCEPTED, _Body} = post(<<"/pools/", PoolId/binary, "/open">>).
+    % {ignored, PoolId}.
+    {?HTTP_STATUS_ACCEPTED, _Body} = post(<<"/pools/", PoolId/binary, "/open">>).
 
 %%% Private Functions
 
@@ -87,13 +84,14 @@ create_check_task_suite(CheckInput) ->
                     <<"user_id">> => UserId
                 }
             }
-            || #{description := Description,
-                 screenshot :=  Screenshot,
-                 url := Url,
-                 price := Price,
-                 assignment_id := AssignmentId,
-                 user_id := UserId
-                } <- CheckInput
+            || #{
+                   description := Description,
+                   screenshot := Screenshot,
+                   url := Url,
+                   price := Price,
+                   assignment_id := AssignmentId,
+                   user_id := UserId
+               } <- CheckInput
         ]
     }),
 
@@ -101,7 +99,6 @@ create_check_task_suite(CheckInput) ->
 
     #{<<"id">> := TaskSuiteId} = Body,
     TaskSuiteId.
-
 
 % TODO count the failed attempts by counting statuses other than ACCEPTED
 get_search_result(SearchTaskId) ->
@@ -174,60 +171,59 @@ get_search_result(SearchTaskId) ->
 
 get_quotes(CheckTaskSuiteId) ->
     {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_suite_id=", CheckTaskSuiteId/binary, "&status=ACCEPTED">>),
-    #{
-        % when this breaks, we need pagination
-        <<"has_more">> := false,
-        <<"items">> := [
-            #{
-                <<"user_id">> := _UserId1,
-                <<"solutions">> := [
-                    #{<<"output_values">> := #{<<"result">> := Answer1_1}},
-                    #{<<"output_values">> := #{<<"result">> := Answer1_2}},
-                    #{<<"output_values">> := #{<<"result">> := Answer1_3}}
-                ],
-                <<"tasks">> := [
-                        #{
-                            <<"input_values">> := #{
-                                <<"url">> := Url1,
-                                <<"price">> := Price1,
-                                <<"screenshot">> := Screenshot1
-                            }
-                        },
-                        #{
-                            <<"input_values">> := #{
-                                <<"url">> := Url2,
-                                <<"price">> := Price2,
-                                <<"screenshot">> := Screenshot2
-                            }
-                        },
-                        #{
-                            <<"input_values">> := #{
-                                <<"url">> := Url3,
-                                <<"price">> := Price3,
-                                <<"screenshot">> := Screenshot3
-                            }
-                        }
-                ]
-            },
+    io:format("~p~n", [Body]),
+    [
+        #{
+            <<"user_id">> := _CheckUserId1,
+            <<"solutions">> := [
+                #{<<"output_values">> := #{<<"result">> := Answer1_1}},
+                #{<<"output_values">> := #{<<"result">> := Answer1_2}},
+                #{<<"output_values">> := #{<<"result">> := Answer1_3}}
+            ],
+            <<"tasks">> := [
+                #{
+                    <<"input_values">> := #{
+                        <<"url">> := Url1,
+                        <<"price">> := Price1,
+                        <<"screenshot">> := Screenshot1,
+                        % <<"user_id">> := SearchUserId,
+                        <<"assignment_id">> := SearchAssignmentId
+                    }
+                },
+                #{
+                    <<"input_values">> := #{
+                        <<"url">> := Url2,
+                        <<"price">> := Price2,
+                        <<"screenshot">> := Screenshot2
+                    }
+                },
+                #{
+                    <<"input_values">> := #{
+                        <<"url">> := Url3,
+                        <<"price">> := Price3,
+                        <<"screenshot">> := Screenshot3
+                    }
+                }
+            ]
+        },
 
-            #{
-                <<"user_id">> := _UserId2,
-                <<"solutions">> := [
-                    #{<<"output_values">> := #{<<"result">> := Answer2_1}},
-                    #{<<"output_values">> := #{<<"result">> := Answer2_2}},
-                    #{<<"output_values">> := #{<<"result">> := Answer2_3}}
-                ]
-            },
-            #{
-                <<"user_id">> := _UserId3,
-                <<"solutions">> := [
-                    #{<<"output_values">> := #{<<"result">> := Answer3_1}},
-                    #{<<"output_values">> := #{<<"result">> := Answer3_2}},
-                    #{<<"output_values">> := #{<<"result">> := Answer3_3}}
-                ]
-            }
-        ]
-    } = Body,
+        #{
+            <<"user_id">> := _CheckUserId2,
+            <<"solutions">> := [
+                #{<<"output_values">> := #{<<"result">> := Answer2_1}},
+                #{<<"output_values">> := #{<<"result">> := Answer2_2}},
+                #{<<"output_values">> := #{<<"result">> := Answer2_3}}
+            ]
+        },
+        #{
+            <<"user_id">> := _CheckUserId3,
+            <<"solutions">> := [
+                #{<<"output_values">> := #{<<"result">> := Answer3_1}},
+                #{<<"output_values">> := #{<<"result">> := Answer3_2}},
+                #{<<"output_values">> := #{<<"result">> := Answer3_3}}
+            ]
+        }
+    ] = fake_unpaginate(Body),
 
     Votes = [
         vote(Answer1_1, Answer2_1, Answer3_1),
@@ -236,15 +232,19 @@ get_quotes(CheckTaskSuiteId) ->
     ],
 
     Quotes = [
-     {Price1, Url1, Screenshot1},
-     {Price2, Url2, Screenshot2},
-     {Price3, Url3, Screenshot3}
+        {Price1, Url1, Screenshot1},
+        {Price2, Url2, Screenshot2},
+        {Price3, Url3, Screenshot3}
     ],
 
-    % TODO do rewarding here
+    GoodQuotes = [Quote || {Quote, Vote} <- lists:zip(Quotes, Votes), Vote =:= true],
 
-    [Quote || {Quote, Vote} <- lists:zip(Quotes, Votes), Vote =:= true].
+    case (length(GoodQuotes) > 2) of
+        true -> accept_assignment(SearchAssignmentId);
+        false -> reject_assignment(SearchAssignmentId)
+    end,
 
+    GoodQuotes.
 
 % TODO just use https://yandex.ru/support/toloka-requester/concepts/mvote.html
 vote(<<"yes">>, <<"yes">>, _) -> true;
@@ -254,12 +254,12 @@ vote(_, _, _) -> false.
 
 prepare_check_input(SearchResult) ->
     #{
-      description := SearchDescription,
-      quotes := Quotes,
+        description := SearchDescription,
+        quotes := Quotes,
 
-      assignment_id := AssignmentId,
-      user_id := UserId
-     } = SearchResult,
+        assignment_id := AssignmentId,
+        user_id := UserId
+    } = SearchResult,
     [
         #{
             % payload
@@ -274,6 +274,13 @@ prepare_check_input(SearchResult) ->
         }
         || #{url := Url, price := Price, filename := Filename} <- Quotes
     ].
+
+%%% Assignment Checking
+
+accept_assignment(AssignmentId) ->
+    patch(<<"/assignments/", AssignmentId/binary>>, #{<<"status">> => <<"ACCEPTED">>}).
+reject_assignment(AssignmentId) ->
+    patch(<<"/assignments/", AssignmentId/binary>>, #{<<"status">> => <<"REJECTED">>}).
 
 %%% Descriptions
 
@@ -295,9 +302,9 @@ download(AttachmentId) ->
     Bytes.
 
 generate_filename(AttachmentId) ->
-    {?HTTP_STATUS_OK, Body} = get_(<<"/attachments/",  AttachmentId/binary>>),
+    {?HTTP_STATUS_OK, Body} = get_(<<"/attachments/", AttachmentId/binary>>),
     #{<<"name">> := FilenameFromUser} = Body,
-    FileExtension =  lists:last(binary:split(FilenameFromUser,  <<".">>, [global])),
+    FileExtension = lists:last(binary:split(FilenameFromUser, <<".">>, [global])),
     Filename = <<AttachmentId/binary, ".", FileExtension/binary>>,
     Filename.
 
@@ -311,15 +318,6 @@ copy_to_yadisk(AttachmentId) ->
 %%% HTTP wrappers
 
 urlize(Path) -> <<?TOLOKA_BASE_URI/binary, Path/binary>>.
-
-post(Path) -> post(Path, <<>>).
-post(Path, Json) ->
-    Url = urlize(Path),
-    Headers = headers(),
-    Payload = jsx:encode(Json),
-    {ok, StatusCode, _ResponseHeaders, BodyRef} = hackney:post(Url, Headers, Payload),
-    {ok, Body} = hackney:body(BodyRef),
-    {StatusCode, jsx:decode(Body, [return_maps])}.
 
 get_(Path) -> get_(json, Path).
 
@@ -335,6 +333,23 @@ get_(ResponseType, Path) ->
         end,
     {StatusCode, DecodedBody}.
 
+post(Path) -> post(Path, <<>>).
+post(Path, Json) ->
+    Url = urlize(Path),
+    Headers = headers(),
+    Payload = jsx:encode(Json),
+    {ok, StatusCode, _ResponseHeaders, BodyRef} = hackney:post(Url, Headers, Payload),
+    {ok, Body} = hackney:body(BodyRef),
+    {StatusCode, jsx:decode(Body, [return_maps])}.
+
+patch(Path, Json) ->
+    Url = urlize(Path),
+    Headers = headers(),
+    Payload = jsx:encode(Json),
+    {ok, StatusCode, _ResponseHeaders, BodyRef} = hackney:patch(Url, Headers, Payload),
+    {ok, Body} = hackney:body(BodyRef),
+    {StatusCode, jsx:decode(Body, [return_maps])}.
+
 headers() ->
     [
         {<<"Content-Type">>, <<"application/json">>},
@@ -343,6 +358,9 @@ headers() ->
 
 % Logging
 
-% TODO real logging
+% TODO add real logging
 log(String) -> log(String, []).
 log(String, Args) -> io:format("~p: " ++ String ++ "~n", [self() | Args]).
+
+% Pagination
+fake_unpaginate(#{<<"has_more">> := false, <<"items">> := Items}) -> Items.
