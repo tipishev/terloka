@@ -172,7 +172,7 @@ handle_info(
     NextWakeup = future(SleepTime),
     log("I will check this search at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     NewState = State#state{
-        current_task = expect_check,
+        current_task = expect_toloka_check,
         toloka_check_id = TolokaCheckId,
         % don't need it anymore, so reset.
         toloka_search_id = undefined,
