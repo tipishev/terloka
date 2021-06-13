@@ -5,8 +5,12 @@
 -export([start/1, load/1, stop/1, pause/1, status/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 
+-export([test/0]).
+
+-include_lib("kernel/include/logger.hrl").
 -define(SECONDS, 1000).
 -define(MINUTES, 60 * ?SECONDS).
+
 
 %%% Types
 
@@ -41,6 +45,7 @@
     | expect_toloka_search
     | create_toloka_check
     | expect_toloka_check
+    | extract_quotes
     % final states
     | success
     | fail.
@@ -179,10 +184,48 @@ handle_info(
         next_wakeup = NextWakeup
     },
     {noreply, NewState, _SleepTime = SleepTime};
+
+%% Create Check
+handle_info(
+    timeout,
+    State = #state{
+        current_task = expect_toloka_check,
+        toloka_check_id = TolokaCheckId
+    }
+) ->
+    log("Ok, time to check if the check is checked..."),
+    IsCheckReady = toloka:is_check_ready(TolokaCheckId),
+    case IsCheckReady of
+        false ->
+            log("Check is not ready yet..."),
+            % TODO exponential backoff with 1.5 coefficient and max of 30min.
+            SleepTime = 1 * ?MINUTES,
+            NextWakeup = future(SleepTime),
+            log("I will check the check again at ~p. (~p seconds)",
+                [NextWakeup, SleepTime div ?SECONDS]),
+            NewState = State#state{current_task = expect_toloka_check, next_wakeup = NextWakeup},
+            {noreply, NewState, _SleepTime = SleepTime};
+        true ->
+            log("Hooray, the check is ready!"),
+            SleepTime = 3 * ?SECONDS,
+            NextWakeup = future(SleepTime),
+            log("I will extract check results at ~p. (~p seconds)",
+                [NextWakeup, SleepTime div ?SECONDS]),
+            NewState = State#state{
+                current_task = extract_quotes,
+                next_wakeup = NextWakeup
+            },
+            {noreply, NewState, _SleepTime = SleepTime}
+    end;
+%% Extract Quotes
+
 %% Catch-all
 handle_info(timeout, State) ->
-    log("I don't know what to do :("),
-    {noreply, State, _SleepTime = 10 * ?SECONDS}.
+    SleepTime = 30 * ?SECONDS,
+    NextWakeup = future(SleepTime),
+    log("I don't know what to do :( I will sleep another ~p seconds.", [SleepTime div ?SECONDS]),
+    NewState = State#state{next_wakeup = NextWakeup},
+    {noreply, NewState, _SleepTime = SleepTime}.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -257,3 +300,6 @@ future(MilliSecondsFromNow) ->
 % TODO use real logging
 log(String) -> log(String, []).
 log(String, Args) -> io:format("~p: " ++ String ++ "~n", [self() | Args]).
+
+test() ->
+    ?LOG_INFO(#{foo => "bar"}).
