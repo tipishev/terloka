@@ -2,6 +2,9 @@ DOC_PATH = priv/doc/
 
 .PHONY: deps compile test doc clean
 
+auto: compile
+	ERL_FLAGS="+pc unicode" rebar3 auto
+
 deps:
 	rebar3 get-deps
 
@@ -20,9 +23,6 @@ test:
 
 shell: compile
 	rebar3 shell
-
-auto: compile
-	ERL_FLAGS="+pc unicode" rebar3 auto
 
 release: deps
 	rebar3 release
@@ -43,4 +43,3 @@ docker-down:
 
 dialyze:
 	rebar3 dialyzer
-
