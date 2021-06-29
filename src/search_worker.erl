@@ -60,29 +60,33 @@
 % TODO use Name, City, etc.
 % TODO add budget cap
 % TODO add ReportTo?
+
+%% @doc creates a new worker searching Description.
 start(Description) ->
     State = #state{description = Description, current_task = create_toloka_search},
     {ok, Pid} = gen_server:start_link(?MODULE, State, []),
     Pid.
 
+%% @doc loads a worker from a StateMap.
 load(StateMap) ->
     State = map_to_state(StateMap),
     {ok, Pid} = gen_server:start_link(?MODULE, State, []),
     Pid.
 
+%% @doc stops a worker with Pid.
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
+%% @doc pauses a worker with Pid.
 pause(Pid) ->
     gen_server:call(Pid, pause).
 
-% also acts as resume the pause
+%% @doc requests the worker with Pid to report its status, also resumes.
 status(Pid) ->
     gen_server:call(Pid, status).
 
 %%% OTP Callbacks
 
-% I initialize with state rather than description to enable loading state later.
 init(State = #state{description = Description, quotes_required = QuotesRequired}) ->
    ?LOG_INFO("My goal is to find ~p quotes for \"~ts\".", [QuotesRequired, Description]),
     SleepTime = 3 * ?SECONDS,
@@ -96,7 +100,7 @@ handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 handle_call(status, _From, State = #state{next_wakeup = NextWakeup}) ->
     ?LOG_INFO("Got request for status"),
-    SleepTime = max(milliseconds_until(NextWakeup), 3000),
+    SleepTime = max(milliseconds_until(NextWakeup), 3 * ?SECONDS),
     ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     {reply, state_to_map(State), State, SleepTime};
 handle_call(pause, _From, State) ->
@@ -125,7 +129,7 @@ handle_info(
 ) when SearchesLeft > 0 ->
     ?LOG_INFO("Creating a search..."),
     TolokaSearchId = toloka:search(Description),
-    ?LOG_INFO("Ok, created (id: ~p)", [TolokaSearchId]),
+    ?LOG_INFO("Ok, created a search (id: ~p)", [TolokaSearchId]),
     SleepTime = 1 * ?MINUTES,
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Will check it at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
@@ -136,6 +140,7 @@ handle_info(
         next_wakeup = NextWakeup
     },
     {noreply, NewState, _SleepTime = SleepTime};
+
 %% Expect Search
 handle_info(
     timeout,
@@ -166,6 +171,7 @@ handle_info(
             },
             {noreply, NewState, _SleepTime = SleepTime}
     end;
+
 %% Create Check
 handle_info(
     timeout,
@@ -176,7 +182,7 @@ handle_info(
 ) ->
     ?LOG_INFO("Creating a check..."),
     TolokaCheckId = toloka:check(TolokaSearchId),
-    ?LOG_INFO("Ok, created (id: ~p)", [TolokaCheckId]),
+    ?LOG_INFO("Ok, created a check (id: ~p)", [TolokaCheckId]),
     SleepTime = 1 * ?MINUTES,
     NextWakeup = future(SleepTime),
     ?LOG_INFO("I will check this search at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
@@ -189,7 +195,7 @@ handle_info(
     },
     {noreply, NewState, _SleepTime = SleepTime};
 
-%% Create Check
+%% Expect Check
 handle_info(
     timeout,
     State = #state{
@@ -221,6 +227,7 @@ handle_info(
             },
             {noreply, NewState, _SleepTime = SleepTime}
     end;
+
 %% Extract Quotes
 
 %% Catch-all
@@ -238,7 +245,6 @@ terminate(_Reason, _State) -> ok.
 
 %%% Helpers
 
-% TODO use it to make snapshots
 state_to_map(#state{
     description = Description,
     quotes_required = QuotesRequired,
@@ -280,8 +286,6 @@ map_to_state(#{
         next_wakeup = NextWakeup,
         quotes = Quotes
     }.
-
-% TODO map_to_state()
 
 %%% Time stuff
 
