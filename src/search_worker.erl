@@ -6,7 +6,7 @@
 -behaviour(gen_server).
 
 % module interface
--export([start/1, load/1, stop/1, pause/1, status/1]).
+-export([start/1, load/1, stop/1, pause/1, resume/1, status/1]).
 
 % gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
@@ -29,14 +29,13 @@
     current_task :: current_task(),
     toloka_search_id = undefined :: undefined | binary(),
     toloka_check_id = undefined :: undefined | binary(),
-    next_wakeup :: calendar:date_time(),
     % TODO last_wait_time, max_wait_time
 
     % Result, they are all good.
-    quotes = [] :: [quote()]
+    quotes = [] :: [quote()],
 
-    % % Transient variables
-    % timer_ref = undefined :: timer:tref()
+    % Transient variables
+    timer_ref = undefined :: undefined | timer:tref()
 }).
 
 -record(quote, {
@@ -84,7 +83,11 @@ stop(Pid) ->
 pause(Pid) ->
     gen_server:call(Pid, pause).
 
-%% @doc requests the worker with Pid to report its status, also resumes.
+%% @doc resumes a worker with Pid.
+resume(Pid) ->
+    gen_server:call(Pid, resume).
+
+%% @doc requests the worker with Pid to report its status.
 status(Pid) ->
     gen_server:call(Pid, status).
 
@@ -95,22 +98,30 @@ init(State = #state{description = Description, quotes_required = QuotesRequired}
     SleepTime = timer:seconds(3),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
-    NewState = State#state{next_wakeup = NextWakeup},
-    timer:send_after(SleepTime, act),
+    {ok, TimerRef} = timer:send_after(SleepTime, act),
+    NewState = State#state{timer_ref = TimerRef},
     {ok, NewState}.
 
 handle_call(stop, _From, State) ->
     ?LOG_INFO("I am stopping."),
     {stop, normal, ok, State};
-handle_call(status, _From, State = #state{next_wakeup = NextWakeup}) ->
+handle_call(status, _From, State) ->
     ?LOG_INFO("Got request for status"),
-    SleepTime = max(milliseconds_until(NextWakeup), timer:seconds(3)),
-    ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
-    timer:send_after(SleepTime, act),
     {reply, state_to_map(State), State};
-handle_call(pause, _From, State) ->
+handle_call(pause, _From, State = #state{timer_ref = TimerRef}) ->
     ?LOG_INFO("Ok, I take a break."),
-    {reply, ok, State};
+    {ok, cancel} = timer:cancel(TimerRef),
+    NewState = State#state{timer_ref = undefined},
+    {reply, ok, NewState};
+handle_call(resume, _From, State = #state{timer_ref = undefined}) ->
+    ?LOG_INFO("Ok, I resume."),
+    SleepTime = timer:seconds(1),
+    NextWakeup = future(SleepTime),
+    ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+    {ok, TimerRef} = timer:send_after(SleepTime, act),
+    NewState = State#state{timer_ref = TimerRef},
+    {reply, ok, NewState};
+
 handle_call(_Mst, _From, State) ->
     ?LOG_INFO("Hm.. unknown call, I am ignoring it."),
     {noreply, State}.
@@ -137,13 +148,13 @@ handle_info(
     SleepTime = timer:minutes(1),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Will check it at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+    {ok, TimerRef} = timer:send_after(SleepTime, act),
     NewState = State#state{
         current_task = expect_toloka_search,
         searches_left = SearchesLeft - 1,
         toloka_search_id = TolokaSearchId,
-        next_wakeup = NextWakeup
+        timer_ref = TimerRef
     },
-    timer:send_after(SleepTime, act),
     {noreply, NewState};
 
 %% Expect Search
@@ -163,19 +174,19 @@ handle_info(
             SleepTime = timer:minutes(1),
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will check it again at ~p (~p seconds).", [NextWakeup, SleepTime div ?SECONDS]),
-            NewState = State#state{current_task = expect_toloka_search, next_wakeup = NextWakeup},
-            timer:send_after(SleepTime, act),
+            {ok, TimerRef} = timer:send_after(SleepTime, act),
+            NewState = State#state{current_task = expect_toloka_search, timer_ref = TimerRef},
             {noreply, NewState};
         true ->
             ?LOG_INFO("Hooray, it's ready!"),
             SleepTime = timer:seconds(3),
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will create a check at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+            {ok, TimerRef} = timer:send_after(SleepTime, act),
             NewState = State#state{
                 current_task = create_toloka_check,
-                next_wakeup = NextWakeup
+                timer_ref = TimerRef
             },
-            timer:send_after(SleepTime, act),
             {noreply, NewState}
     end;
 
@@ -193,14 +204,14 @@ handle_info(
     SleepTime = timer:minutes(1),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("I will check this search at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+    {ok, TimerRef} = timer:send_after(SleepTime, act),
     NewState = State#state{
         current_task = expect_toloka_check,
         toloka_check_id = TolokaCheckId,
         % don't need it anymore, so reset.
         toloka_search_id = undefined,
-        next_wakeup = NextWakeup
+        timer_ref = TimerRef
     },
-    timer:send_after(SleepTime, act),
     {noreply, NewState};
 
 %% Expect Check
@@ -221,8 +232,8 @@ handle_info(
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will check the check again at ~p (~p seconds).",
                 [NextWakeup, SleepTime div ?SECONDS]),
-            NewState = State#state{current_task = expect_toloka_check, next_wakeup = NextWakeup},
-            timer:send_after(SleepTime, act),
+            {ok, TimerRef} = timer:send_after(SleepTime, act),
+            NewState = State#state{current_task = expect_toloka_check, timer_ref = TimerRef},
             {noreply, NewState};
         true ->
             ?LOG_INFO("Hooray, the check is ready!"),
@@ -230,11 +241,11 @@ handle_info(
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will extract check results at ~p. (~p seconds)",
                 [NextWakeup, SleepTime div ?SECONDS]),
+            {ok, TimerRef} = timer:send_after(SleepTime, act),
             NewState = State#state{
                 current_task = extract_quotes,
-                next_wakeup = NextWakeup
+                timer_ref = TimerRef
             },
-            timer:send_after(SleepTime, act),
             {noreply, NewState}
     end;
 
@@ -243,10 +254,9 @@ handle_info(
 %% Catch-all
 handle_info(act, State) ->
     SleepTime = timer:seconds(30),
-    NextWakeup = future(SleepTime),
     ?LOG_INFO("I don't know what to do :( I will sleep another ~p seconds.", [SleepTime div ?SECONDS]),
-    NewState = State#state{next_wakeup = NextWakeup},
-    timer:send_after(SleepTime, act),
+    {ok, TimerRef} = timer:send_after(SleepTime, act),
+    NewState = State#state{timer_ref = TimerRef},
     {noreply, NewState}.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -263,7 +273,7 @@ state_to_map(#state{
     current_task = CurrentTask,
     toloka_search_id = TolokaSearchId,
     toloka_check_id = TolokaCheckId,
-    next_wakeup = NextWakeup,
+    timer_ref = TimerRef,
     quotes = Quotes
 }) ->
     #{
@@ -273,7 +283,7 @@ state_to_map(#state{
         current_task => CurrentTask,
         toloka_search_id => TolokaSearchId,
         toloka_check_id => TolokaCheckId,
-        next_wakeup => NextWakeup,
+        timerRef => TimerRef,
         quotes => Quotes
     }.
 
@@ -284,7 +294,6 @@ map_to_state(#{
     current_task := CurrentTask,
     toloka_search_id := TolokaSearchId,
     toloka_check_id := TolokaCheckId,
-    next_wakeup := NextWakeup,
     quotes := Quotes
 }) ->
     #state{
@@ -294,19 +303,12 @@ map_to_state(#{
         current_task = CurrentTask,
         toloka_search_id = TolokaSearchId,
         toloka_check_id = TolokaCheckId,
-        next_wakeup = NextWakeup,
         quotes = Quotes
     }.
 
 %%% Time stuff
 
-milliseconds_until(Future) ->
-    Now = calendar:local_time(),
-    NowSeconds = calendar:datetime_to_gregorian_seconds(Now),
-    FutureSeconds = calendar:datetime_to_gregorian_seconds(Future),
-    SecondsUntil = FutureSeconds - NowSeconds,
-    timer:seconds(SecondsUntil).
-
+% TODO replace with generic
 future(MilliSecondsFromNow) ->
     SecondsFromNow = MilliSecondsFromNow div ?SECONDS,
     calendar:gregorian_seconds_to_datetime(
