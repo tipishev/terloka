@@ -13,8 +13,6 @@
 
 -include_lib("kernel/include/logger.hrl").
 -define(SECONDS, 1000).
--define(MINUTES, 60 * ?SECONDS).
-
 
 %%% Types
 
@@ -89,7 +87,7 @@ status(Pid) ->
 
 init(State = #state{description = Description, quotes_required = QuotesRequired}) ->
    ?LOG_INFO("My goal is to find ~p quotes for \"~ts\".", [QuotesRequired, Description]),
-    SleepTime = 3 * ?SECONDS,
+    SleepTime = timer:seconds(3),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     NewState = State#state{next_wakeup = NextWakeup},
@@ -100,7 +98,7 @@ handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 handle_call(status, _From, State = #state{next_wakeup = NextWakeup}) ->
     ?LOG_INFO("Got request for status"),
-    SleepTime = max(milliseconds_until(NextWakeup), 3 * ?SECONDS),
+    SleepTime = max(milliseconds_until(NextWakeup), timer:seconds(3)),
     ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     {reply, state_to_map(State), State, SleepTime};
 handle_call(pause, _From, State) ->
@@ -130,7 +128,7 @@ handle_info(
     ?LOG_INFO("Creating a search..."),
     TolokaSearchId = toloka:search(Description),
     ?LOG_INFO("Ok, created a search (id: ~p)", [TolokaSearchId]),
-    SleepTime = 1 * ?MINUTES,
+    SleepTime = timer:minutes(1),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Will check it at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     NewState = State#state{
@@ -155,14 +153,14 @@ handle_info(
         false ->
             ?LOG_INFO("Search is not ready yet..."),
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
-            SleepTime = 1 * ?MINUTES,
+            SleepTime = timer:minutes(1),
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will check it again at ~p (~p seconds).", [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{current_task = expect_toloka_search, next_wakeup = NextWakeup},
             {noreply, NewState, _SleepTime = SleepTime};
         true ->
             ?LOG_INFO("Hooray, it's ready!"),
-            SleepTime = 3 * ?SECONDS,
+            SleepTime = timer:seconds(3),
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will create a check at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{
@@ -183,7 +181,7 @@ handle_info(
     ?LOG_INFO("Creating a check..."),
     TolokaCheckId = toloka:check(TolokaSearchId),
     ?LOG_INFO("Ok, created a check (id: ~p)", [TolokaCheckId]),
-    SleepTime = 1 * ?MINUTES,
+    SleepTime = timer:minutes(1),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("I will check this search at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     NewState = State#state{
@@ -209,7 +207,7 @@ handle_info(
         false ->
             ?LOG_INFO("Check is not ready yet..."),
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
-            SleepTime = 1 * ?MINUTES,
+            SleepTime = timer:minutes(1),
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will check the check again at ~p (~p seconds).",
                 [NextWakeup, SleepTime div ?SECONDS]),
@@ -217,7 +215,7 @@ handle_info(
             {noreply, NewState, _SleepTime = SleepTime};
         true ->
             ?LOG_INFO("Hooray, the check is ready!"),
-            SleepTime = 3 * ?SECONDS,
+            SleepTime = timer:seconds(3),
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will extract check results at ~p. (~p seconds)",
                 [NextWakeup, SleepTime div ?SECONDS]),
@@ -232,7 +230,7 @@ handle_info(
 
 %% Catch-all
 handle_info(timeout, State) ->
-    SleepTime = 30 * ?SECONDS,
+    SleepTime = timer:seconds(30),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("I don't know what to do :( I will sleep another ~p seconds.", [SleepTime div ?SECONDS]),
     NewState = State#state{next_wakeup = NextWakeup},
@@ -294,7 +292,7 @@ milliseconds_until(Future) ->
     NowSeconds = calendar:datetime_to_gregorian_seconds(Now),
     FutureSeconds = calendar:datetime_to_gregorian_seconds(Future),
     SecondsUntil = FutureSeconds - NowSeconds,
-    ?SECONDS * SecondsUntil.
+    timer:seconds(SecondsUntil).
 
 future(MilliSecondsFromNow) ->
     SecondsFromNow = MilliSecondsFromNow div ?SECONDS,
