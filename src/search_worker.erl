@@ -34,6 +34,9 @@
 
     % Result, they are all good.
     quotes = [] :: [quote()]
+
+    % % Transient variables
+    % timer_ref = undefined :: timer:tref()
 }).
 
 -record(quote, {
@@ -93,7 +96,7 @@ init(State = #state{description = Description, quotes_required = QuotesRequired}
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     NewState = State#state{next_wakeup = NextWakeup},
-    timer:send_after(SleepTime, do_action),
+    timer:send_after(SleepTime, act),
     {ok, NewState}.
 
 handle_call(stop, _From, State) ->
@@ -103,7 +106,7 @@ handle_call(status, _From, State = #state{next_wakeup = NextWakeup}) ->
     ?LOG_INFO("Got request for status"),
     SleepTime = max(milliseconds_until(NextWakeup), timer:seconds(3)),
     ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
-    timer:send_after(SleepTime, do_action),
+    timer:send_after(SleepTime, act),
     {reply, state_to_map(State), State};
 handle_call(pause, _From, State) ->
     ?LOG_INFO("Ok, I take a break."),
@@ -121,7 +124,7 @@ handle_cast(_Msg, State) ->
 
 %% Create Search
 handle_info(
-    do_action,
+    act,
     State = #state{
         current_task = create_toloka_search,
         searches_left = SearchesLeft,
@@ -140,12 +143,12 @@ handle_info(
         toloka_search_id = TolokaSearchId,
         next_wakeup = NextWakeup
     },
-    timer:send_after(SleepTime, do_action),
+    timer:send_after(SleepTime, act),
     {noreply, NewState};
 
 %% Expect Search
 handle_info(
-    do_action,
+    act,
     State = #state{
         current_task = expect_toloka_search,
         toloka_search_id = TolokaSearchId
@@ -161,7 +164,7 @@ handle_info(
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will check it again at ~p (~p seconds).", [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{current_task = expect_toloka_search, next_wakeup = NextWakeup},
-            timer:send_after(SleepTime, do_action),
+            timer:send_after(SleepTime, act),
             {noreply, NewState};
         true ->
             ?LOG_INFO("Hooray, it's ready!"),
@@ -172,13 +175,13 @@ handle_info(
                 current_task = create_toloka_check,
                 next_wakeup = NextWakeup
             },
-            timer:send_after(SleepTime, do_action),
+            timer:send_after(SleepTime, act),
             {noreply, NewState}
     end;
 
 %% Create Check
 handle_info(
-    do_action,
+    act,
     State = #state{
         current_task = create_toloka_check,
         toloka_search_id = TolokaSearchId
@@ -197,12 +200,12 @@ handle_info(
         toloka_search_id = undefined,
         next_wakeup = NextWakeup
     },
-    timer:send_after(SleepTime, do_action),
+    timer:send_after(SleepTime, act),
     {noreply, NewState};
 
 %% Expect Check
 handle_info(
-    do_action,
+    act,
     State = #state{
         current_task = expect_toloka_check,
         toloka_check_id = TolokaCheckId
@@ -219,7 +222,7 @@ handle_info(
             ?LOG_INFO("I will check the check again at ~p (~p seconds).",
                 [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{current_task = expect_toloka_check, next_wakeup = NextWakeup},
-            timer:send_after(SleepTime, do_action),
+            timer:send_after(SleepTime, act),
             {noreply, NewState};
         true ->
             ?LOG_INFO("Hooray, the check is ready!"),
@@ -231,19 +234,19 @@ handle_info(
                 current_task = extract_quotes,
                 next_wakeup = NextWakeup
             },
-            timer:send_after(SleepTime, do_action),
+            timer:send_after(SleepTime, act),
             {noreply, NewState}
     end;
 
 %% Extract Quotes
 
 %% Catch-all
-handle_info(do_action, State) ->
+handle_info(act, State) ->
     SleepTime = timer:seconds(30),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("I don't know what to do :( I will sleep another ~p seconds.", [SleepTime div ?SECONDS]),
     NewState = State#state{next_wakeup = NextWakeup},
-    timer:send_after(SleepTime, do_action),
+    timer:send_after(SleepTime, act),
     {noreply, NewState}.
 
 code_change(_OldVsn, State, _Extra) ->
