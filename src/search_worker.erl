@@ -35,7 +35,7 @@
     quotes = [] :: [quote()],
 
     % Transient variables
-    timer_ref = undefined :: undefined | timer:tref()
+    timer_ref = undefined :: undefined | reference()
 }).
 
 -record(quote, {
@@ -98,7 +98,7 @@ init(State = #state{description = Description, quotes_required = QuotesRequired}
     SleepTime = timer:seconds(3),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
-    {ok, TimerRef} = timer:send_after(SleepTime, act),
+    TimerRef = erlang:send_after(SleepTime, self(), act),
     NewState = State#state{timer_ref = TimerRef},
     {ok, NewState}.
 
@@ -110,7 +110,8 @@ handle_call(status, _From, State) ->
     {reply, state_to_map(State), State};
 handle_call(pause, _From, State = #state{timer_ref = TimerRef}) ->
     ?LOG_INFO("Ok, I take a break."),
-    {ok, cancel} = timer:cancel(TimerRef),
+    Time = erlang:cancel_timer(TimerRef),
+    ?LOG_INFO("Canceled the timer ~p seconds before expiration.", [Time div ?SECONDS]),
     NewState = State#state{timer_ref = undefined},
     {reply, ok, NewState};
 handle_call(resume, _From, State = #state{timer_ref = undefined}) ->
@@ -118,7 +119,7 @@ handle_call(resume, _From, State = #state{timer_ref = undefined}) ->
     SleepTime = timer:seconds(1),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
-    {ok, TimerRef} = timer:send_after(SleepTime, act),
+    TimerRef = erlang:send_after(SleepTime, self(), act),
     NewState = State#state{timer_ref = TimerRef},
     {reply, ok, NewState};
 
@@ -148,7 +149,7 @@ handle_info(
     SleepTime = timer:minutes(1),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Will check it at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
-    {ok, TimerRef} = timer:send_after(SleepTime, act),
+    TimerRef = erlang:send_after(SleepTime, self(), act),
     NewState = State#state{
         current_task = expect_toloka_search,
         searches_left = SearchesLeft - 1,
@@ -174,7 +175,7 @@ handle_info(
             SleepTime = timer:minutes(1),
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will check it again at ~p (~p seconds).", [NextWakeup, SleepTime div ?SECONDS]),
-            {ok, TimerRef} = timer:send_after(SleepTime, act),
+            TimerRef = erlang:send_after(SleepTime, self(), act),
             NewState = State#state{current_task = expect_toloka_search, timer_ref = TimerRef},
             {noreply, NewState};
         true ->
@@ -182,7 +183,7 @@ handle_info(
             SleepTime = timer:seconds(3),
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will create a check at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
-            {ok, TimerRef} = timer:send_after(SleepTime, act),
+            TimerRef = erlang:send_after(SleepTime, self(), act),
             NewState = State#state{
                 current_task = create_toloka_check,
                 timer_ref = TimerRef
@@ -204,7 +205,7 @@ handle_info(
     SleepTime = timer:minutes(1),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("I will check this search at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
-    {ok, TimerRef} = timer:send_after(SleepTime, act),
+    TimerRef = erlang:send_after(SleepTime, self(),act),
     NewState = State#state{
         current_task = expect_toloka_check,
         toloka_check_id = TolokaCheckId,
@@ -232,7 +233,7 @@ handle_info(
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will check the check again at ~p (~p seconds).",
                 [NextWakeup, SleepTime div ?SECONDS]),
-            {ok, TimerRef} = timer:send_after(SleepTime, act),
+            TimerRef = erlang:send_after(SleepTime, self(), act),
             NewState = State#state{current_task = expect_toloka_check, timer_ref = TimerRef},
             {noreply, NewState};
         true ->
@@ -241,7 +242,7 @@ handle_info(
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will extract check results at ~p. (~p seconds)",
                 [NextWakeup, SleepTime div ?SECONDS]),
-            {ok, TimerRef} = timer:send_after(SleepTime, act),
+            TimerRef = erlang:send_after(SleepTime, self(), act),
             NewState = State#state{
                 current_task = extract_quotes,
                 timer_ref = TimerRef
@@ -255,7 +256,7 @@ handle_info(
 handle_info(act, State) ->
     SleepTime = timer:seconds(30),
     ?LOG_INFO("I don't know what to do :( I will sleep another ~p seconds.", [SleepTime div ?SECONDS]),
-    {ok, TimerRef} = timer:send_after(SleepTime, act),
+    TimerRef = erlang:send_after(SleepTime, self(), act),
     NewState = State#state{timer_ref = TimerRef},
     {noreply, NewState}.
 
