@@ -3,7 +3,7 @@ DOC_PATH = priv/doc/
 .PHONY: deps compile test doc clean
 
 auto: compile
-	ERL_FLAGS="+pc unicode" rebar3 auto
+	ERL_FLAGS="+pc unicode -config sys" rebar3 auto
 
 deps:
 	rebar3 get-deps

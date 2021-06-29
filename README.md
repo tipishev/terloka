@@ -1,7 +1,12 @@
 terloka
-=====
+=======
 
 An OTP application
+
+Start Console with Auto Reload
+------------------------------
+    $ make
+
 
 Build
 -----

@@ -1,11 +1,15 @@
+%%% @doc this module represents the logic of a worker as if he were a human who
+%%% writes its state on a piece of paper -- the state record.
+
 -module(search_worker).
 
 -behaviour(gen_server).
 
+% module interface
 -export([start/1, load/1, stop/1, pause/1, status/1]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 
--export([test/0]).
+% gen_server callbacks
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 
 -include_lib("kernel/include/logger.hrl").
 -define(SECONDS, 1000).
@@ -80,27 +84,27 @@ status(Pid) ->
 
 % I initialize with state rather than description to enable loading state later.
 init(State = #state{description = Description, quotes_required = QuotesRequired}) ->
-   log("My goal is to find ~p quotes for \"~ts\".", [QuotesRequired, Description]),
+   ?LOG_INFO("My goal is to find ~p quotes for \"~ts\".", [QuotesRequired, Description]),
     SleepTime = 3 * ?SECONDS,
     NextWakeup = future(SleepTime),
-    log("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+    ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     NewState = State#state{next_wakeup = NextWakeup},
     {ok, NewState, _SleepTime = SleepTime}.
 
 handle_call(stop, _From, State) ->
-    log("I am stopping."),
+    ?LOG_INFO("I am stopping."),
     {stop, normal, ok, State};
 handle_call(status, _From, State = #state{next_wakeup = NextWakeup}) ->
-    log("Got request for status"),
+    ?LOG_INFO("Got request for status"),
     SleepTime = max(milliseconds_until(NextWakeup), 3000),
-    log("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+    ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     {reply, state_to_map(State), State, SleepTime};
 handle_call(pause, _From, State) ->
-    log("Ok, I take a break."),
+    ?LOG_INFO("Ok, I take a break."),
     % note the absence of Timeout
     {reply, ok, State};
 handle_call(_Mst, _From, State) ->
-    log("Hm.. unknown call, I am ignoring it."),
+    ?LOG_INFO("Hm.. unknown call, I am ignoring it."),
     {noreply, State}.
 
 handle_cast(_Msg, State) ->
@@ -119,12 +123,12 @@ handle_info(
         description = Description
     }
 ) when SearchesLeft > 0 ->
-    log("Creating a search..."),
+    ?LOG_INFO("Creating a search..."),
     TolokaSearchId = toloka:search(Description),
-    log("Ok, created (id: ~p)", [TolokaSearchId]),
+    ?LOG_INFO("Ok, created (id: ~p)", [TolokaSearchId]),
     SleepTime = 1 * ?MINUTES,
     NextWakeup = future(SleepTime),
-    log("Will check it at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+    ?LOG_INFO("Will check it at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     NewState = State#state{
         current_task = expect_toloka_search,
         searches_left = SearchesLeft - 1,
@@ -140,22 +144,22 @@ handle_info(
         toloka_search_id = TolokaSearchId
     }
 ) ->
-    log("Ok, time to check if the search is ready..."),
+    ?LOG_INFO("Ok, time to check if the search is ready..."),
     IsSearchReady = toloka:is_search_ready(TolokaSearchId),
     case IsSearchReady of
         false ->
-            log("Search is not ready yet..."),
+            ?LOG_INFO("Search is not ready yet..."),
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
             SleepTime = 1 * ?MINUTES,
             NextWakeup = future(SleepTime),
-            log("I will check it again at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+            ?LOG_INFO("I will check it again at ~p (~p seconds).", [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{current_task = expect_toloka_search, next_wakeup = NextWakeup},
             {noreply, NewState, _SleepTime = SleepTime};
         true ->
-            log("Hooray, it's ready!"),
+            ?LOG_INFO("Hooray, it's ready!"),
             SleepTime = 3 * ?SECONDS,
             NextWakeup = future(SleepTime),
-            log("I will create a check at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+            ?LOG_INFO("I will create a check at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{
                 current_task = create_toloka_check,
                 next_wakeup = NextWakeup
@@ -170,12 +174,12 @@ handle_info(
         toloka_search_id = TolokaSearchId
     }
 ) ->
-    log("Creating a check..."),
+    ?LOG_INFO("Creating a check..."),
     TolokaCheckId = toloka:check(TolokaSearchId),
-    log("Ok, created (id: ~p)", [TolokaCheckId]),
+    ?LOG_INFO("Ok, created (id: ~p)", [TolokaCheckId]),
     SleepTime = 1 * ?MINUTES,
     NextWakeup = future(SleepTime),
-    log("I will check this search at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
+    ?LOG_INFO("I will check this search at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     NewState = State#state{
         current_task = expect_toloka_check,
         toloka_check_id = TolokaCheckId,
@@ -193,23 +197,23 @@ handle_info(
         toloka_check_id = TolokaCheckId
     }
 ) ->
-    log("Ok, time to check if the check is checked..."),
+    ?LOG_INFO("Ok, time to check if the check is checked..."),
     IsCheckReady = toloka:is_check_ready(TolokaCheckId),
     case IsCheckReady of
         false ->
-            log("Check is not ready yet..."),
+            ?LOG_INFO("Check is not ready yet..."),
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
             SleepTime = 1 * ?MINUTES,
             NextWakeup = future(SleepTime),
-            log("I will check the check again at ~p. (~p seconds)",
+            ?LOG_INFO("I will check the check again at ~p (~p seconds).",
                 [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{current_task = expect_toloka_check, next_wakeup = NextWakeup},
             {noreply, NewState, _SleepTime = SleepTime};
         true ->
-            log("Hooray, the check is ready!"),
+            ?LOG_INFO("Hooray, the check is ready!"),
             SleepTime = 3 * ?SECONDS,
             NextWakeup = future(SleepTime),
-            log("I will extract check results at ~p. (~p seconds)",
+            ?LOG_INFO("I will extract check results at ~p. (~p seconds)",
                 [NextWakeup, SleepTime div ?SECONDS]),
             NewState = State#state{
                 current_task = extract_quotes,
@@ -223,7 +227,7 @@ handle_info(
 handle_info(timeout, State) ->
     SleepTime = 30 * ?SECONDS,
     NextWakeup = future(SleepTime),
-    log("I don't know what to do :( I will sleep another ~p seconds.", [SleepTime div ?SECONDS]),
+    ?LOG_INFO("I don't know what to do :( I will sleep another ~p seconds.", [SleepTime div ?SECONDS]),
     NewState = State#state{next_wakeup = NextWakeup},
     {noreply, NewState, _SleepTime = SleepTime}.
 
@@ -295,11 +299,3 @@ future(MilliSecondsFromNow) ->
             calendar:local_time()
         ) + SecondsFromNow
     ).
-
-% Logging
-% TODO use real logging
-log(String) -> log(String, []).
-log(String, Args) -> io:format("~p: " ++ String ++ "~n", [self() | Args]).
-
-test() ->
-    ?LOG_INFO(#{foo => "bar"}).
