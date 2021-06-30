@@ -52,6 +52,8 @@
     | create_toloka_check
     | expect_toloka_check
     | extract_quotes
+    | evaluate_result
+    % | TODO rename evaluate_result to check_completion
     % final states
     | success
     | fail.
@@ -249,7 +251,61 @@ act(
             }
     end;
 %% Extract Quotes
+act(
+    State = #state{
+        current_task = extract_quotes,
+        toloka_check_id = TolokaCheckId,
+        quotes = OldQuotes
+    }
+) ->
+    NewQuotes = toloka:get_quotes(TolokaCheckId),
+    Quotes = lists:append(OldQuotes, NewQuotes),
+    ?LOG_INFO("I added ~p to my quotes, and now they are ~p.", [NewQuotes, Quotes]),
+    SleepTime = timer:seconds(3),
+    ?LOG_INFO("I will evaluate my results in ~p seconds.", [SleepTime div ?SECONDS]),
+    TimerRef = erlang:send_after(SleepTime, self(), act),
+    State#state{
+        quotes = Quotes,
+        % we used it, so it's not needed anymore
+        toloka_check_id = undefined,
+        current_task = evaluate_result,
+        timer_ref = TimerRef
+    };
+%% Evaluate Result
+act(
+    State = #state{
+        current_task = evaluate_result,
+        quotes = Quotes,
+        quotes_required = QuotesRequired,
+        searches_left = SearchesLeft
+    }
+) ->
+    ?LOG_INFO("I am evaluating result and deciding if I should go again."),
+    QuotesLength = length(Quotes),
+    NextTask =
+        case QuotesLength >= QuotesRequired of
+            true ->
+                ?LOG_INFO("Hooray, enough quotes! I call it a success."),
+                success;
+            false ->
+                ?LOG_INFO("Not enough quotes :("),
+                case SearchesLeft > 0 of
+                    true ->
+                        ?LOG_INFO("Let's do another search!"),
+                        create_toloka_search;
+                    false ->
+                        ?LOG_INFO("Too bad, I cannot do another search. I failed."),
+                        fail
+                end
+        end,
 
+    SleepTime = timer:seconds(3),
+    ?LOG_INFO("I will sleep another ~p seconds.", [SleepTime div ?SECONDS]),
+    TimerRef = erlang:send_after(SleepTime, self(), act),
+    State#state{
+        current_task = NextTask,
+        timer_ref = TimerRef
+    };
 %% Catch-all
 act(State) ->
     SleepTime = timer:seconds(30),

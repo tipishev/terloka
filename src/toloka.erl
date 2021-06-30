@@ -1,16 +1,16 @@
 -module(toloka).
 
--compile(export_all).
-% -export([
-    % search/1, is_search_ready/1,
+-export([
+    search/1, is_search_ready/1,
 
-    %% TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
-    % check/1, is_check_ready/1, get_quotes/1
+    % TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
+    check/1, is_check_ready/1, get_quotes/1
 
-    %% TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
-% ]).
+    % TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
+]).
 
 -include("http_status_codes.hrl").
+-include_lib("kernel/include/logger.hrl").
 
 -define(TOLOKA_BASE_URI, <<"https://toloka.yandex.ru/api/v1">>).
 -define(TOLOKA_TOKEN, <<"AQAAAAAZfxSeAACtpcBhALKZ7k7YjgKe9rNIu5s">>).
@@ -33,7 +33,7 @@ search(Description) ->
 is_search_ready(SearchTaskId) ->
     {?HTTP_STATUS_OK, Body} = get_(
         <<"/assignments?task_id=", SearchTaskId/binary,
-            % "&status=ACCEPTED">>),
+            % "&status=ACCEPTED">>  % FIXME
             "&status=SUBMITTED">>
     ),
     SubmittedAssignments = fake_unpaginate(Body),
@@ -104,9 +104,8 @@ create_check_task_suite(CheckInput) ->
 
 % TODO count the failed attempts by counting statuses other than ACCEPTED
 get_search_result(SearchTaskId) ->
-    % FIXME SUBMITTED vs ACCEPTED
     {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=SUBMITTED">>),
-    % {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=ACCEPTED">>),
+    % {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=ACCEPTED">>), % FIXME
     #{
         <<"items">> := [
             #{
@@ -173,7 +172,6 @@ get_search_result(SearchTaskId) ->
 
 get_quotes(CheckTaskSuiteId) ->
     {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_suite_id=", CheckTaskSuiteId/binary, "&status=ACCEPTED">>),
-    io:format("~p~n", [Body]),
     [
         #{
             <<"user_id">> := _CheckUserId1,
@@ -311,7 +309,7 @@ generate_filename(AttachmentId) ->
     Filename.
 
 copy_to_yadisk(AttachmentId) ->
-    log("Uploading ~p...~n", [AttachmentId]),
+    ?LOG_INFO("Uploading ~p...~n", [AttachmentId]),
     FileName = generate_filename(AttachmentId),
     Bytes = download(AttachmentId),
     OperationId = yadisk:upload_bytes(Bytes, FileName),
@@ -360,12 +358,6 @@ headers() ->
         {<<"Content-Type">>, <<"application/json">>},
         {<<"Authorization">>, <<"OAuth ", ?TOLOKA_TOKEN/binary>>}
     ].
-
-% Logging
-
-% TODO add real logging
-log(String) -> log(String, []).
-log(String, Args) -> io:format("~p: " ++ String ++ "~n", [self() | Args]).
 
 % Pagination
 fake_unpaginate(#{<<"has_more">> := false, <<"items">> := Items}) -> Items.

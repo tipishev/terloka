@@ -1,12 +1,11 @@
-<0.2425.0>: Got request for status
-<0.2425.0>: Sleeping until {{2021,6,6},{10,11,35}}. (11 seconds)
-#{current_task => expect_toloka_search,
+2021-06-30T23:04:19.630801+02:00 info <0.295.0>: Got request for status                                         
+{current_task => extract_quotes,
 description => <<"Гайка М-12 оцинкованная в Москве"/utf8>>,
-next_wakeup => {{2021,6,6},{10,11,35}},
 quotes => [],quotes_required => 5,searches_left => 2,
-toloka_check_id => undefined,
-toloka_search_id =>
-<<"0001602152--60bc82e4376658692e3195da">>}
+timerRef => undefined,
+toloka_check_id =>
+<<"000179a175--60dcd5e490e9df0d7f10de69">>,
+toloka_search_id => undefined}
 -----
 <0.2429.0>: Got request for status                                                                                                                 
 <0.2429.0>: Sleeping until {{2021,6,6},{10,10,40}}. (13 seconds)                                                                                   
