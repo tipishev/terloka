@@ -94,7 +94,7 @@ status(Pid) ->
 %%% OTP Callbacks
 
 init(State = #state{description = Description, quotes_required = QuotesRequired}) ->
-   ?LOG_INFO("My goal is to find ~p quotes for \"~ts\".", [QuotesRequired, Description]),
+    ?LOG_INFO("My goal is to find ~p quotes for \"~ts\".", [QuotesRequired, Description]),
     SleepTime = timer:seconds(3),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
@@ -122,7 +122,6 @@ handle_call(resume, _From, State = #state{timer_ref = undefined}) ->
     TimerRef = erlang:send_after(SleepTime, self(), act),
     NewState = State#state{timer_ref = TimerRef},
     {reply, ok, NewState};
-
 handle_call(_Mst, _From, State) ->
     ?LOG_INFO("Hm.. unknown call, I am ignoring it."),
     {noreply, State}.
@@ -130,13 +129,21 @@ handle_call(_Mst, _From, State) ->
 handle_cast(_Msg, State) ->
     {noreply, State}.
 
+handle_info(act, State) ->
+    NewState = act(State),
+    {noreply, NewState}.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+terminate(_Reason, _State) -> ok.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %                            Main State Logic                                  %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% Create Search
-handle_info(
-    act,
+act(
     State = #state{
         current_task = create_toloka_search,
         searches_left = SearchesLeft,
@@ -150,17 +157,14 @@ handle_info(
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Will check it at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     TimerRef = erlang:send_after(SleepTime, self(), act),
-    NewState = State#state{
+    State#state{
         current_task = expect_toloka_search,
         searches_left = SearchesLeft - 1,
         toloka_search_id = TolokaSearchId,
         timer_ref = TimerRef
-    },
-    {noreply, NewState};
-
+    };
 %% Expect Search
-handle_info(
-    act,
+act(
     State = #state{
         current_task = expect_toloka_search,
         toloka_search_id = TolokaSearchId
@@ -176,24 +180,20 @@ handle_info(
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will check it again at ~p (~p seconds).", [NextWakeup, SleepTime div ?SECONDS]),
             TimerRef = erlang:send_after(SleepTime, self(), act),
-            NewState = State#state{current_task = expect_toloka_search, timer_ref = TimerRef},
-            {noreply, NewState};
+            State#state{current_task = expect_toloka_search, timer_ref = TimerRef};
         true ->
             ?LOG_INFO("Hooray, it's ready!"),
             SleepTime = timer:seconds(3),
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will create a check at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
             TimerRef = erlang:send_after(SleepTime, self(), act),
-            NewState = State#state{
+            State#state{
                 current_task = create_toloka_check,
                 timer_ref = TimerRef
-            },
-            {noreply, NewState}
+            }
     end;
-
 %% Create Check
-handle_info(
-    act,
+act(
     State = #state{
         current_task = create_toloka_check,
         toloka_search_id = TolokaSearchId
@@ -205,19 +205,16 @@ handle_info(
     SleepTime = timer:minutes(1),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("I will check this search at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
-    TimerRef = erlang:send_after(SleepTime, self(),act),
-    NewState = State#state{
+    TimerRef = erlang:send_after(SleepTime, self(), act),
+    State#state{
         current_task = expect_toloka_check,
         toloka_check_id = TolokaCheckId,
         % don't need it anymore, so reset.
         toloka_search_id = undefined,
         timer_ref = TimerRef
-    },
-    {noreply, NewState};
-
+    };
 %% Expect Check
-handle_info(
-    act,
+act(
     State = #state{
         current_task = expect_toloka_check,
         toloka_check_id = TolokaCheckId
@@ -231,39 +228,34 @@ handle_info(
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
             SleepTime = timer:minutes(1),
             NextWakeup = future(SleepTime),
-            ?LOG_INFO("I will check the check again at ~p (~p seconds).",
-                [NextWakeup, SleepTime div ?SECONDS]),
+            ?LOG_INFO(
+                "I will check the check again at ~p (~p seconds).",
+                [NextWakeup, SleepTime div ?SECONDS]
+            ),
             TimerRef = erlang:send_after(SleepTime, self(), act),
-            NewState = State#state{current_task = expect_toloka_check, timer_ref = TimerRef},
-            {noreply, NewState};
+            State#state{current_task = expect_toloka_check, timer_ref = TimerRef};
         true ->
             ?LOG_INFO("Hooray, the check is ready!"),
             SleepTime = timer:seconds(3),
             NextWakeup = future(SleepTime),
-            ?LOG_INFO("I will extract check results at ~p. (~p seconds)",
-                [NextWakeup, SleepTime div ?SECONDS]),
+            ?LOG_INFO(
+                "I will extract check results at ~p. (~p seconds)",
+                [NextWakeup, SleepTime div ?SECONDS]
+            ),
             TimerRef = erlang:send_after(SleepTime, self(), act),
-            NewState = State#state{
+            State#state{
                 current_task = extract_quotes,
                 timer_ref = TimerRef
-            },
-            {noreply, NewState}
+            }
     end;
-
 %% Extract Quotes
 
 %% Catch-all
-handle_info(act, State) ->
+act(State) ->
     SleepTime = timer:seconds(30),
     ?LOG_INFO("I don't know what to do :( I will sleep another ~p seconds.", [SleepTime div ?SECONDS]),
     TimerRef = erlang:send_after(SleepTime, self(), act),
-    NewState = State#state{timer_ref = TimerRef},
-    {noreply, NewState}.
-
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
-
-terminate(_Reason, _State) -> ok.
+    State#state{timer_ref = TimerRef}.
 
 %%% Helpers
 
