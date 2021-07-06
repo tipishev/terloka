@@ -15,3 +15,6 @@ next_wakeup => {{2021,6,6},{10,10,40}},
 quotes => [],quotes_required => 5,searches_left => 2,
 toloka_check_id => undefined,
 toloka_search_id => <<"0001602152--60bc82ebaa879733e198415d">>}   
+
+=======
+#{current_task => expect_toloka_check, description =><<"Термометр для детской ванны в Москве"/utf8>>,quotes =>[{197.0, <<"https://m.market.yandex.ru/product--termometr-dlia-vannoi-rybka-tsvet-goluboi-2300123/774424690?hid=">>,<<"screenshots/be726b12-639f-43eb-a193-5ffb8988746c.png">>}, {219.0, <<"https://m.market.yandex.ru/product--bezrtutnyi-termometr-roxy-kids-dlia-vody/1731010507?hid=9890">>, <<"screenshots/a48aede9-10b4-457f-a6e0-976d7aa8b3e3.png">>}, {187.0,<<"https://m.market.yandex.ru/product--lubby-termometr-dlia-vanny-ot-0-mes/877392227?hid=989037">>,<<"screenshots/340c0de7-c182-4ad1-b65e-4b936465de81.png">>}],  quotes_required => 5,searches_left => 1,toloka_check_id => <<"000179a175--60df5909005e697c1200c2ce">>,toloka_search_id =>undefined}

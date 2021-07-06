@@ -32,9 +32,9 @@ search(Description) ->
 
 is_search_ready(SearchTaskId) ->
     {?HTTP_STATUS_OK, Body} = get_(
-        <<"/assignments?task_id=", SearchTaskId/binary,
+        % <<"/assignments?task_id=", SearchTaskId/binary>>
+        <<"/assignments?task_id=", SearchTaskId/binary, "&status=SUBMITTED">>
             % "&status=ACCEPTED">>  % FIXME
-            "&status=SUBMITTED">>
     ),
     SubmittedAssignments = fake_unpaginate(Body),
     case SubmittedAssignments of

@@ -238,7 +238,8 @@ act(
             State#state{current_task = expect_toloka_check, timer_ref = TimerRef};
         true ->
             ?LOG_INFO("Hooray, the check is ready!"),
-            SleepTime = timer:seconds(3),
+            % to allow all 3 answers to appear
+            SleepTime = timer:seconds(30),
             NextWakeup = future(SleepTime),
             ?LOG_INFO(
                 "I will extract check results at ~p. (~p seconds)",
@@ -258,6 +259,7 @@ act(
         quotes = OldQuotes
     }
 ) ->
+    ?LOG_INFO("I am extracting quotes"),
     NewQuotes = toloka:get_quotes(TolokaCheckId),
     Quotes = lists:append(OldQuotes, NewQuotes),
     ?LOG_INFO("I added ~p to my quotes, and now they are ~p.", [NewQuotes, Quotes]),
