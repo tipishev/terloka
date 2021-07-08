@@ -6,7 +6,7 @@
 -behaviour(gen_server).
 
 % module interface
--export([start/1, load/1, stop/1, pause/1, resume/1, status/1]).
+-export([start/1, save/2, load/1, stop/1, pause/1, resume/1, status/1]).
 
 % gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
@@ -71,11 +71,19 @@ start(Description) ->
     {ok, Pid} = gen_server:start_link(?MODULE, State, []),
     Pid.
 
+%% @doc writes current state to {Pid}.json in the current directory.
+% TODO send a save message to the worker?
+save(Pid, Filename) ->
+    gen_server:call(Pid, {save, Filename}).
+
 %% @doc loads a worker from a StateMap.
-load(StateMap) ->
+load(Filename) ->
+    ?LOG_INFO("Loading worker's state from ~p~n", [Filename]),
+    [StateMap] = jsx:consult(Filename, [return_maps, {labels, existing_atom}]),
     State = map_to_state(StateMap),
     {ok, Pid} = gen_server:start_link(?MODULE, State, []),
     Pid.
+
 
 %% @doc stops a worker with Pid.
 stop(Pid) ->
@@ -124,6 +132,12 @@ handle_call(resume, _From, State = #state{timer_ref = undefined}) ->
     TimerRef = erlang:send_after(SleepTime, self(), act),
     NewState = State#state{timer_ref = TimerRef},
     {reply, ok, NewState};
+
+handle_call({save, Filename}, _From, State) ->
+    ?LOG_INFO("Saving my state to ~p~n", [Filename]),
+    save_state(State, Filename),
+    {reply, ok, State};
+
 handle_call(_Mst, _From, State) ->
     ?LOG_INFO("Hm.. unknown call, I am ignoring it."),
     {noreply, State}.
@@ -288,6 +302,9 @@ act(
         case QuotesLength >= QuotesRequired of
             true ->
                 ?LOG_INFO("Hooray, enough quotes! I call it a success."),
+                Filename = io_lib:format("success_~p.json", [self()]),
+                ?LOG_INFO("Writing result to ~p.", [Filename]),
+                save_state(State, Filename),
                 success;
             false ->
                 ?LOG_INFO("Not enough quotes :("),
@@ -324,7 +341,8 @@ state_to_map(#state{
     current_task = CurrentTask,
     toloka_search_id = TolokaSearchId,
     toloka_check_id = TolokaCheckId,
-    timer_ref = TimerRef,
+    % TODO encode as seconds before it goes off?
+    timer_ref = _TimerRef,
     quotes = Quotes
 }) ->
     #{
@@ -334,8 +352,7 @@ state_to_map(#state{
         current_task => CurrentTask,
         toloka_search_id => TolokaSearchId,
         toloka_check_id => TolokaCheckId,
-        timerRef => TimerRef,
-        quotes => Quotes
+        quotes => [tuple_to_list(Quote) || Quote <- Quotes]
     }.
 
 map_to_state(#{
@@ -351,11 +368,21 @@ map_to_state(#{
         description = Description,
         quotes_required = QuotesRequired,
         searches_left = SearchesLeft,
-        current_task = CurrentTask,
-        toloka_search_id = TolokaSearchId,
-        toloka_check_id = TolokaCheckId,
-        quotes = Quotes
+        current_task = binary_to_existing_atom(CurrentTask),
+        toloka_search_id = undefined_or_binary(TolokaSearchId),
+        toloka_check_id = undefined_or_binary(TolokaCheckId),
+        quotes = [list_to_tuple(Quote) || Quote <- Quotes]
     }.
+
+undefined_or_binary(<<"undefined">>) -> undefined;
+undefined_or_binary(Binary) when is_binary(Binary) -> Binary.
+
+save_state(State, Filename) ->
+    Status = state_to_map(State),
+    JsonStatus = jsx:encode(Status, [{indent, 4}, space]),
+    file:write_file(Filename, JsonStatus),
+    ok.
+
 
 %%% Time stuff
 
