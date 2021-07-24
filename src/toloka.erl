@@ -52,9 +52,9 @@ check(SearchTaskId) ->
 is_check_ready(CheckTaskSuiteId) ->
     {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_suite_id=", CheckTaskSuiteId/binary, "&status=ACCEPTED">>),
     Answers = fake_unpaginate(Body),
-    case Answers of
-        [_ | _] -> true;
-        [] -> false
+    case length(Answers) of
+        3 -> true;
+        _ -> false
     end.
 
 open_pool(PoolId) ->
