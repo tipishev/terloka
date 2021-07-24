@@ -4,9 +4,12 @@
     search/1, is_search_ready/1,
 
     % TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
-    check/1, is_check_ready/1, get_quotes/1
+    check/1, is_check_ready/1, get_quotes/1,
 
     % TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
+
+    % for debugging
+    task_info/1, assignments_info/1
 ]).
 
 -include("http_status_codes.hrl").
@@ -41,6 +44,21 @@ is_search_ready(SearchTaskId) ->
         [_ | _] -> true;
         [] -> false
     end.
+
+task_info(TaskId) ->
+    get_(<<"/tasks/", TaskId/binary>>).
+
+assignments_info(TaskId) ->
+    {?HTTP_STATUS_OK, PaginatedBody} = get_(<<"/assignments?task_id=", TaskId/binary>>),
+    Assignments = fake_unpaginate(PaginatedBody),
+    Statuses = [maps:get(<<"status">>, Assignment) || Assignment <- Assignments],
+    Count = fun(Status, Accumulator) ->
+        CurrentCount = maps:get(Status, Accumulator, 0),
+        maps:put(Status, CurrentCount + 1, Accumulator)
+    end,
+    lists:foldl(Count, #{}, Statuses).
+
+
 
 check(SearchTaskId) ->
     % FIXME adapt to map

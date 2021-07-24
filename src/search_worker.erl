@@ -252,8 +252,7 @@ act(
             State#state{current_task = expect_toloka_check, timer_ref = TimerRef};
         true ->
             ?LOG_INFO("Hooray, the check is ready!"),
-            % to allow all 3 answers to appear
-            SleepTime = timer:seconds(30),
+            SleepTime = timer:seconds(10),
             NextWakeup = future(SleepTime),
             ?LOG_INFO(
                 "I will extract check results at ~p. (~p seconds)",
