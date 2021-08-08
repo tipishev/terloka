@@ -17,7 +17,7 @@
 
 -define(TOLOKA_BASE_URI, <<"https://toloka.yandex.ru/api/v1">>).
 -define(TOLOKA_TOKEN, <<"AQAAAAAZfxSeAACtpcBhALKZ7k7YjgKe9rNIu5s">>).
--define(SEARCH_POOL_ID, <<"23077202">>).
+-define(SEARCH_POOL_ID, <<"26469315">>).
 -define(CHECK_POOL_ID, <<"24748405">>).
 
 % TODO create multiple tasks in one request
@@ -27,9 +27,11 @@ search(Description) ->
             input_values => #{description => Description},
             pool_id => ?SEARCH_POOL_ID,
             overlap => 1
+            % open_pool => true
         }
     ]),
     #{<<"items">> := #{<<"0">> := #{<<"id">> := TaskId}}} = Body,
+    % TODO use open_pool = true
     open_pool(?SEARCH_POOL_ID),
     TaskId.
 
@@ -115,6 +117,7 @@ create_check_task_suite(CheckInput) ->
         ]
     }),
 
+    % TODO use open_pool=true
     open_pool(?CHECK_POOL_ID),
 
     #{<<"id">> := TaskSuiteId} = Body,
