@@ -6,7 +6,7 @@
 -behaviour(gen_server).
 
 % module interface
--export([start/1, save/2, load/1, stop/1, pause/1, resume/1, status/1]).
+-export([start/1, save/1, load/1, stop/1, pause/1, resume/1, status/1]).
 
 % gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
@@ -68,12 +68,12 @@
 %% @doc creates a new worker searching Description.
 start(Description) ->
     State = #state{description = Description, current_task = create_toloka_search},
-    {ok, Pid} = gen_server:start_link(?MODULE, State, []),
+    {ok, Pid} = gen_server:start(?MODULE, State, []),
     Pid.
 
 %% @doc writes current state to {Pid}.json in the current directory.
-% TODO send a save message to the worker?
-save(Pid, Filename) ->
+save(Pid) ->
+    Filename = io_lib:format("~p.json", [Pid]),
     gen_server:call(Pid, {save, Filename}).
 
 %% @doc loads a worker from a StateMap.
@@ -81,9 +81,8 @@ load(Filename) ->
     ?LOG_INFO("Loading worker's state from ~p~n", [Filename]),
     [StateMap] = jsx:consult(Filename, [return_maps, {labels, existing_atom}]),
     State = map_to_state(StateMap),
-    {ok, Pid} = gen_server:start_link(?MODULE, State, []),
+    {ok, Pid} = gen_server:start(?MODULE, State, []),
     Pid.
-
 
 %% @doc stops a worker with Pid.
 stop(Pid) ->
@@ -132,12 +131,10 @@ handle_call(resume, _From, State = #state{timer_ref = undefined}) ->
     TimerRef = erlang:send_after(SleepTime, self(), act),
     NewState = State#state{timer_ref = TimerRef},
     {reply, ok, NewState};
-
 handle_call({save, Filename}, _From, State) ->
     ?LOG_INFO("Saving my state to ~p~n", [Filename]),
     save_state(State, Filename),
     {reply, ok, State};
-
 handle_call(_Mst, _From, State) ->
     ?LOG_INFO("Hm.. unknown call, I am ignoring it."),
     {noreply, State}.
@@ -381,7 +378,6 @@ save_state(State, Filename) ->
     JsonStatus = jsx:encode(Status, [{indent, 4}, space]),
     file:write_file(Filename, JsonStatus),
     ok.
-
 
 %%% Time stuff
 
