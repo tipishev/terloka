@@ -1,44 +1,35 @@
 -module(toloka).
 
--export([
-    search/1, is_search_ready/1,
+-compile(export_all).
 
-    % TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
-    check/1, is_check_ready/1, get_quotes/1,
+% -export([
+%     search/1, is_search_ready/1,
 
-    % TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
+%     % TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
+%     check/1, is_check_ready/1, get_quotes/1,
 
-    % for debugging
-    task_info/1, assignments_info/1
-]).
+%     % TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
+
+%     % for debugging
+%     task_info/1, assignments_info/1
+% ]).
 
 -include("http_status_codes.hrl").
 -include_lib("kernel/include/logger.hrl").
 
 -define(TOLOKA_BASE_URI, <<"https://toloka.yandex.ru/api/v1">>).
 -define(TOLOKA_TOKEN, <<"AQAAAAAZfxSeAACtpcBhALKZ7k7YjgKe9rNIu5s">>).
--define(SEARCH_POOL_ID, <<"26469315">>).
--define(CHECK_POOL_ID, <<"24748405">>).
+-define(SEARCH_POOL_ID, <<"26718752">>).
+-define(CHECK_POOL_ID, <<"27085584">>).
 
 % TODO create multiple tasks in one request
 search(Description) ->
-    {?HTTP_STATUS_CREATED, Body} = post(<<"/tasks">>, [
-        #{
-            input_values => #{description => Description},
-            pool_id => ?SEARCH_POOL_ID,
-            overlap => 1
-            % open_pool => true
-        }
-    ]),
-    #{<<"items">> := #{<<"0">> := #{<<"id">> := TaskId}}} = Body,
-    % TODO use open_pool = true
-    open_pool(?SEARCH_POOL_ID),
-    TaskId.
+    create_search_task_suite(Description).
 
-is_search_ready(SearchTaskId) ->
+is_search_ready(SearchTaskSuiteId) ->
     {?HTTP_STATUS_OK, Body} = get_(
         % <<"/assignments?task_id=", SearchTaskId/binary>>
-        <<"/assignments?task_id=", SearchTaskId/binary, "&status=SUBMITTED">>
+        <<"/assignments?task_suite_id=", SearchTaskSuiteId/binary, "&status=SUBMITTED">>
             % "&status=ACCEPTED">>  % FIXME
     ),
     SubmittedAssignments = fake_unpaginate(Body),
@@ -50,8 +41,8 @@ is_search_ready(SearchTaskId) ->
 task_info(TaskId) ->
     get_(<<"/tasks/", TaskId/binary>>).
 
-assignments_info(TaskId) ->
-    {?HTTP_STATUS_OK, PaginatedBody} = get_(<<"/assignments?task_id=", TaskId/binary>>),
+assignments_info(TaskSuiteId) ->
+    {?HTTP_STATUS_OK, PaginatedBody} = get_(<<"/assignments?task_suite_id=", TaskSuiteId/binary>>),
     Assignments = fake_unpaginate(PaginatedBody),
     Statuses = [maps:get(<<"status">>, Assignment) || Assignment <- Assignments],
     Count = fun(Status, Accumulator) ->
@@ -59,8 +50,6 @@ assignments_info(TaskId) ->
         maps:put(Status, CurrentCount + 1, Accumulator)
     end,
     lists:foldl(Count, #{}, Statuses).
-
-
 
 check(SearchTaskId) ->
     % FIXME adapt to map
@@ -85,6 +74,28 @@ open_pool(PoolId) ->
     end.
 
 %%% Private Functions
+
+create_search_task_suite(Description) ->
+    {?HTTP_STATUS_CREATED, Body} = post(<<"/task-suites">>, #{
+        <<"pool_id">> => ?SEARCH_POOL_ID,
+
+        % TODO check if necessary given pool overlap settings
+        <<"overlap">> => 1,
+
+        <<"tasks">> => [
+            #{
+                <<"input_values">> => #{
+                    <<"description">> => unicode:characters_to_binary(Description)
+                }
+            }
+        ]
+    }),
+
+    % TODO use open_pool=true
+    open_pool(?SEARCH_POOL_ID),
+
+    #{<<"id">> := TaskSuiteId} = Body,
+    TaskSuiteId.
 
 create_check_task_suite(CheckInput) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/task-suites">>, #{
@@ -125,7 +136,7 @@ create_check_task_suite(CheckInput) ->
 
 % TODO count the failed attempts by counting statuses other than ACCEPTED
 get_search_result(SearchTaskId) ->
-    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=SUBMITTED">>),
+    {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_suite_id=", SearchTaskId/binary, "&status=SUBMITTED">>),
     % {?HTTP_STATUS_OK, Body} = get_(<<"/assignments?task_id=", SearchTaskId/binary, "&status=ACCEPTED">>), % FIXME
     #{
         <<"items">> := [
