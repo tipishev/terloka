@@ -143,6 +143,11 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 handle_info(act, State) ->
+
+    Filename = io_lib:format("~p.json", [Pid]),
+    ?LOG_INFO("Backing up my state to ~p~n", [Filename]),
+    save_state(State, Filename),
+
     NewState = act(State),
     {noreply, NewState}.
 
@@ -188,6 +193,8 @@ act(
     case IsSearchReady of
         false ->
             ?LOG_INFO("Search is not ready yet..."),
+            AssignmentsInfo = toloka:assignments_info(TolokaSearchId),
+            ?LOG_INFO("Search status: ~p~n", [AssignmentsInfo]),
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
             SleepTime = timer:minutes(1),
             NextWakeup = future(SleepTime),
@@ -238,6 +245,8 @@ act(
     case IsCheckReady of
         false ->
             ?LOG_INFO("Check is not ready yet..."),
+            AssignmentsInfo = toloka:assignments_info(TolokaCheckId),
+            ?LOG_INFO("Check status: ~p~n", [AssignmentsInfo]),
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
             SleepTime = timer:minutes(1),
             NextWakeup = future(SleepTime),

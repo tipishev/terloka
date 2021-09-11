@@ -1,18 +1,18 @@
 -module(toloka).
 
--compile(export_all).
+% -compile(export_all).
 
-% -export([
-%     search/1, is_search_ready/1,
+-export([
+    search/1, is_search_ready/1,
 
-%     % TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
-%     check/1, is_check_ready/1, get_quotes/1,
+    % TODO combine is_check_ready and get_quotes into get_quotes -> not_ready | quotes?
+    check/1, is_check_ready/1, get_quotes/1,
 
-%     % TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
+    % TODO extract_good_quotes_from_check/1 <- uses passed in price,url context
 
-%     % for debugging
-%     task_info/1, assignments_info/1
-% ]).
+    % for debugging
+    task_info/1, assignments_info/1
+]).
 
 -include("http_status_codes.hrl").
 -include_lib("kernel/include/logger.hrl").
