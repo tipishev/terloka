@@ -144,11 +144,16 @@ handle_cast(_Msg, State) ->
 
 handle_info(act, State) ->
 
-    Filename = io_lib:format("~p.json", [Pid]),
-    ?LOG_INFO("Backing up my state to ~p~n", [Filename]),
+    Filename = io_lib:format("~p.json", [self()]),
+
+    ?LOG_INFO("Backing up my pre-act state to ~p~n", [Filename]),
     save_state(State, Filename),
 
     NewState = act(State),
+
+    ?LOG_INFO("Backing up my post-act state to ~p~n", [Filename]),
+    save_state(State, Filename),
+
     {noreply, NewState}.
 
 code_change(_OldVsn, State, _Extra) ->
