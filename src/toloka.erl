@@ -95,7 +95,7 @@ create_search_task_suite(Description) ->
     open_pool(?SEARCH_POOL_ID),
 
     #{<<"id">> := TaskSuiteId} = Body,
-    TaskSuiteId.
+    {ok, TaskSuiteId}.
 
 create_check_task_suite(CheckInput) ->
     {?HTTP_STATUS_CREATED, Body} = post(<<"/task-suites">>, #{
@@ -132,7 +132,7 @@ create_check_task_suite(CheckInput) ->
     open_pool(?CHECK_POOL_ID),
 
     #{<<"id">> := TaskSuiteId} = Body,
-    TaskSuiteId.
+    {ok, TaskSuiteId}.
 
 % TODO count the failed attempts by counting statuses other than ACCEPTED
 get_search_result(SearchTaskId) ->

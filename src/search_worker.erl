@@ -15,6 +15,7 @@
 
 % TODO remove
 -define(SECONDS, 1000).
+-define(TOLOKA, toloka_mock).
 
 %%% Types
 
@@ -174,7 +175,7 @@ act(
     }
 ) when SearchesLeft > 0 ->
     ?LOG_INFO("Creating a search..."),
-    TolokaSearchId = toloka:search(Description),
+    {ok, TolokaSearchId} = ?TOLOKA:search(Description),
     ?LOG_INFO("Ok, created a search (id: ~p)", [TolokaSearchId]),
     SleepTime = timer:minutes(1),
     NextWakeup = future(SleepTime),
@@ -194,11 +195,11 @@ act(
     }
 ) ->
     ?LOG_INFO("Ok, time to check if the search is ready..."),
-    IsSearchReady = toloka:is_search_ready(TolokaSearchId),
+    IsSearchReady = ?TOLOKA:is_search_ready(TolokaSearchId),
     case IsSearchReady of
         false ->
             ?LOG_INFO("Search is not ready yet..."),
-            AssignmentsInfo = toloka:assignments_info(TolokaSearchId),
+            AssignmentsInfo = ?TOLOKA:assignments_info(TolokaSearchId),
             ?LOG_INFO("Search status: ~p~n", [AssignmentsInfo]),
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
             SleepTime = timer:minutes(1),
@@ -225,7 +226,7 @@ act(
     }
 ) ->
     ?LOG_INFO("Creating a check..."),
-    TolokaCheckId = toloka:check(TolokaSearchId),
+    {ok, TolokaCheckId} = ?TOLOKA:check(TolokaSearchId),
     ?LOG_INFO("Ok, created a check (id: ~p)", [TolokaCheckId]),
     SleepTime = timer:minutes(1),
     NextWakeup = future(SleepTime),
@@ -246,11 +247,11 @@ act(
     }
 ) ->
     ?LOG_INFO("Ok, time to check if the check is checked..."),
-    IsCheckReady = toloka:is_check_ready(TolokaCheckId),
+    IsCheckReady = ?TOLOKA:is_check_ready(TolokaCheckId),
     case IsCheckReady of
         false ->
             ?LOG_INFO("Check is not ready yet..."),
-            AssignmentsInfo = toloka:assignments_info(TolokaCheckId),
+            AssignmentsInfo = ?TOLOKA:assignments_info(TolokaCheckId),
             ?LOG_INFO("Check status: ~p~n", [AssignmentsInfo]),
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
             SleepTime = timer:minutes(1),
@@ -284,7 +285,7 @@ act(
     }
 ) ->
     ?LOG_INFO("I am extracting quotes"),
-    NewQuotes = toloka:get_quotes(TolokaCheckId),
+    NewQuotes = ?TOLOKA:get_quotes(TolokaCheckId),
     Quotes = lists:append(OldQuotes, NewQuotes),
     ?LOG_INFO("I added ~p to my quotes, and now they are ~p.", [NewQuotes, Quotes]),
     SleepTime = timer:seconds(3),
