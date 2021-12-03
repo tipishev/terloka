@@ -1,0 +1,2 @@
+-module(searcher_sup).
+-behavior(supervisor).
