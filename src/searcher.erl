@@ -1,12 +1,12 @@
 %%% @doc this module represents the logic of a worker as if he were a human who
 %%% writes its state on a piece of paper -- the state record.
 
--module(search_worker).
+-module(searcher).
 
 -behaviour(gen_server).
 
 % module interface
--export([start/1, save/1, load/1, stop/1, pause/1, resume/1, status/1]).
+-export([start_link/1, save/1, load/1, stop/1, pause/1, resume/1, status/1]).
 
 % gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
@@ -15,7 +15,8 @@
 
 % TODO remove
 -define(SECONDS, 1000).
--define(TOLOKA, toloka_mock).
+% -define(TOLOKA, toloka_simulator).
+-define(TOLOKA, toloka).
 
 %%% Types
 
@@ -67,10 +68,9 @@
 % TODO add ReportTo?
 
 %% @doc creates a new worker searching Description.
-start(Description) ->
+start_link(Description) ->
     State = #state{description = Description, current_task = create_toloka_search},
-    {ok, Pid} = gen_server:start(?MODULE, State, []),
-    Pid.
+    gen_server:start_link(?MODULE, State, []).
 
 %% @doc writes current state to {Pid}.json in the current directory.
 save(Pid) ->
@@ -144,7 +144,6 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 handle_info(act, State) ->
-
     Filename = io_lib:format("~p.json", [self()]),
 
     ?LOG_INFO("Backing up my pre-act state to ~p~n", [Filename]),
@@ -336,6 +335,15 @@ act(
         current_task = NextTask,
         timer_ref = TimerRef
     };
+%% Success
+act(#state{
+    current_task = success
+    % quotes = Quotes,
+    % quotes_required = QuotesRequired,
+    % searches_left = SearchesLeft
+}) ->
+    ?LOG_INFO("I'm done! *dies*"),
+    stop(self());
 %% Catch-all
 act(State) ->
     SleepTime = timer:seconds(30),

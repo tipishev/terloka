@@ -1,6 +1,6 @@
 %%% @doc this module simulates toloka
 
--module(toloka_mock).
+-module(toloka_simulator).
 
 -export([
     search/1,

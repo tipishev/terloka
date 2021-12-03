@@ -1,7 +1,5 @@
 -module(toloka).
 
-% -compile(export_all).
-
 -export([
     search/1, is_search_ready/1,
 
