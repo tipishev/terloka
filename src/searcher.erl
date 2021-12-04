@@ -6,7 +6,7 @@
 -behaviour(gen_server).
 
 % module interface
--export([start_link/1, save/1, load/1, stop/1, pause/1, resume/1, status/1]).
+-export([start_link/1, start/1, save/1, load/1, stop/1, pause/1, resume/1, status/1]).
 
 % gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
@@ -15,8 +15,12 @@
 
 % TODO remove
 -define(SECONDS, 1000).
-% -define(TOLOKA, toloka_simulator).
--define(TOLOKA, toloka).
+
+-define(TIMEOUT, 3).  % seconds
+
+-define(TOLOKA, toloka_simulator).
+
+%-define(TOLOKA, toloka).
 
 %%% Types
 
@@ -68,6 +72,11 @@
 % TODO add ReportTo?
 
 %% @doc creates a new worker searching Description.
+start(Description) ->
+    State = #state{description = Description, current_task = create_toloka_search},
+    gen_server:start(?MODULE, State, []).
+
+%% @doc creates a new worker searching Description.
 start_link(Description) ->
     State = #state{description = Description, current_task = create_toloka_search},
     gen_server:start_link(?MODULE, State, []).
@@ -105,7 +114,7 @@ status(Pid) ->
 
 init(State = #state{description = Description, quotes_required = QuotesRequired}) ->
     ?LOG_INFO("My goal is to find ~p quotes for \"~ts\".", [QuotesRequired, Description]),
-    SleepTime = timer:seconds(3),
+    SleepTime = timer:seconds(?TIMEOUT div 10),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Sleeping until ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     TimerRef = erlang:send_after(SleepTime, self(), act),
@@ -144,17 +153,23 @@ handle_cast(_Msg, State) ->
     {noreply, State}.
 
 handle_info(act, State) ->
-    Filename = io_lib:format("~p.json", [self()]),
 
-    ?LOG_INFO("Backing up my pre-act state to ~p~n", [Filename]),
-    save_state(State, Filename),
+    % Filename = io_lib:format("~p.json", [self()]),
+    % ?LOG_INFO("Backing up my pre-act state to ~p~n", [Filename]),
+    % save_state(State, Filename),
 
-    NewState = act(State),
+    #state{current_task=CurrentTask} = NewState = act(State),
 
-    ?LOG_INFO("Backing up my post-act state to ~p~n", [Filename]),
-    save_state(State, Filename),
+    % ?LOG_INFO("Backing up my post-act state to ~p~n", [Filename]),
+    % save_state(State, Filename),
 
-    {noreply, NewState}.
+    case CurrentTask of
+        success ->
+            ?LOG_INFO("I'm done! *dies normally*"),
+            {stop, normal, NewState};
+        _ ->
+            {noreply, NewState}
+    end.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -176,7 +191,7 @@ act(
     ?LOG_INFO("Creating a search..."),
     {ok, TolokaSearchId} = ?TOLOKA:search(Description),
     ?LOG_INFO("Ok, created a search (id: ~p)", [TolokaSearchId]),
-    SleepTime = timer:minutes(1),
+    SleepTime = timer:seconds(?TIMEOUT * 2),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("Will check it at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     TimerRef = erlang:send_after(SleepTime, self(), act),
@@ -201,14 +216,14 @@ act(
             AssignmentsInfo = ?TOLOKA:assignments_info(TolokaSearchId),
             ?LOG_INFO("Search status: ~p~n", [AssignmentsInfo]),
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
-            SleepTime = timer:minutes(1),
+            SleepTime = timer:seconds(?TIMEOUT * 2),
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will check it again at ~p (~p seconds).", [NextWakeup, SleepTime div ?SECONDS]),
             TimerRef = erlang:send_after(SleepTime, self(), act),
             State#state{current_task = expect_toloka_search, timer_ref = TimerRef};
         true ->
             ?LOG_INFO("Hooray, it's ready!"),
-            SleepTime = timer:seconds(3),
+            SleepTime = timer:seconds(?TIMEOUT div 10),
             NextWakeup = future(SleepTime),
             ?LOG_INFO("I will create a check at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
             TimerRef = erlang:send_after(SleepTime, self(), act),
@@ -227,7 +242,7 @@ act(
     ?LOG_INFO("Creating a check..."),
     {ok, TolokaCheckId} = ?TOLOKA:check(TolokaSearchId),
     ?LOG_INFO("Ok, created a check (id: ~p)", [TolokaCheckId]),
-    SleepTime = timer:minutes(1),
+    SleepTime = timer:seconds(?TIMEOUT * 2),
     NextWakeup = future(SleepTime),
     ?LOG_INFO("I will check this search at ~p. (~p seconds)", [NextWakeup, SleepTime div ?SECONDS]),
     TimerRef = erlang:send_after(SleepTime, self(), act),
@@ -253,7 +268,7 @@ act(
             AssignmentsInfo = ?TOLOKA:assignments_info(TolokaCheckId),
             ?LOG_INFO("Check status: ~p~n", [AssignmentsInfo]),
             % TODO exponential backoff with 1.5 coefficient and max of 30min.
-            SleepTime = timer:minutes(1),
+            SleepTime = timer:seconds(?TIMEOUT * 2),
             NextWakeup = future(SleepTime),
             ?LOG_INFO(
                 "I will check the check again at ~p (~p seconds).",
@@ -263,7 +278,7 @@ act(
             State#state{current_task = expect_toloka_check, timer_ref = TimerRef};
         true ->
             ?LOG_INFO("Hooray, the check is ready!"),
-            SleepTime = timer:seconds(10),
+            SleepTime = timer:seconds(?TIMEOUT div 3),
             NextWakeup = future(SleepTime),
             ?LOG_INFO(
                 "I will extract check results at ~p. (~p seconds)",
@@ -287,7 +302,7 @@ act(
     NewQuotes = ?TOLOKA:get_quotes(TolokaCheckId),
     Quotes = lists:append(OldQuotes, NewQuotes),
     ?LOG_INFO("I added ~p to my quotes, and now they are ~p.", [NewQuotes, Quotes]),
-    SleepTime = timer:seconds(3),
+    SleepTime = timer:seconds(?TIMEOUT div 10),
     ?LOG_INFO("I will evaluate my results in ~p seconds.", [SleepTime div ?SECONDS]),
     TimerRef = erlang:send_after(SleepTime, self(), act),
     State#state{
@@ -328,26 +343,18 @@ act(
                 end
         end,
 
-    SleepTime = timer:seconds(3),
+    SleepTime = timer:seconds(?TIMEOUT div 10),
     ?LOG_INFO("I will sleep another ~p seconds.", [SleepTime div ?SECONDS]),
     TimerRef = erlang:send_after(SleepTime, self(), act),
     State#state{
         current_task = NextTask,
         timer_ref = TimerRef
     };
-%% Success
-act(#state{
-    current_task = success
-    % quotes = Quotes,
-    % quotes_required = QuotesRequired,
-    % searches_left = SearchesLeft
-}) ->
-    ?LOG_INFO("I'm done! *dies*"),
-    stop(self());
 %% Catch-all
 act(State) ->
-    SleepTime = timer:seconds(30),
-    ?LOG_INFO("I don't know what to do :( I will sleep another ~p seconds.", [SleepTime div ?SECONDS]),
+    SleepTime = timer:seconds(?TIMEOUT),
+    ?LOG_INFO("I don't know what to do :( I will sleep another ~p seconds.",
+              [SleepTime div ?SECONDS]),
     TimerRef = erlang:send_after(SleepTime, self(), act),
     State#state{timer_ref = TimerRef}.
 
