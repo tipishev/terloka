@@ -327,9 +327,9 @@ act(
         case QuotesLength >= QuotesRequired of
             true ->
                 ?LOG_INFO("Hooray, enough quotes! I call it a success."),
-                Filename = io_lib:format("success_~p.json", [self()]),
-                ?LOG_INFO("Writing result to ~p.", [Filename]),
-                save_state(State, Filename),
+                % Filename = io_lib:format("success_~p.json", [self()]),
+                % ?LOG_INFO("Writing result to ~p.", [Filename]),
+                % save_state(State, Filename),
                 success;
             false ->
                 ?LOG_INFO("Not enough quotes :("),
