@@ -9,7 +9,7 @@ test_get() ->
     get_search_requests().
 
 test_put() ->
-    put_search_result(123, <<"asdfghjk">>).
+    put_search_result(123, <<"\">>">>).
 
 % TODO make it a process
 % TODO subscribe to insert events
@@ -25,9 +25,12 @@ put_search_result(PositionId, SearchResult) ->
     {ok, Conn} = esqlite3:open("python_erlang_exchange.sqlite3"),
 
     % FIXME protect against SQL injection
-    Query = io_lib:format("UPDATE search_requests SET result = '~s', updated_at = TIME() WHERE position_id=~p;", [SearchResult, PositionId]),
+    Template =
+        "UPDATE search_requests"
+        " SET result = '~s', updated_at = DATETIME()"
+        " WHERE position_id=~p;",
+    Query = io_lib:format(Template, [SearchResult, PositionId]),
 
-    % io:format(Query).
     esqlite3:q(Query, Conn),
     esqlite3:close(Conn),
     ok.
