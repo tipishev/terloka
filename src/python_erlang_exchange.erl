@@ -19,7 +19,16 @@ test_put() ->
 % TODO subscribe to insert events in SQL
 
 initialize() ->
-    {ok, _Conn} = esqlite3:open(?DB_FILENAME).
+    {ok, Db} = esqlite3:open(?DB_FILENAME),
+    Sql = "CREATE TABLE search_requests "
+    "( id INTEGER PRIMARY KEY AUTOINCREMENT,"
+    " position_id INTEGER NOT NULL,"
+    " description TEXT NOT NULL,"
+    " created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
+    " result TEXT,"
+    " updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);",
+    ok = esqlite3:exec(Sql, Db),
+    esqlite3:close(Db).
 
 get_search_requests() ->
     {ok, Conn} = esqlite3:open(?DB_FILENAME),
@@ -44,8 +53,9 @@ put_search_result(PositionId, SearchResult) ->
 
 %%% Private functions
 
-as_map({PositionId, Description, CreatedAt, Result, UpdatedAt}) ->
+as_map({Id, PositionId, Description, CreatedAt, Result, UpdatedAt}) ->
     #{
+        id => Id,
         position_id => PositionId,
         description => Description,
         created_at => CreatedAt,
