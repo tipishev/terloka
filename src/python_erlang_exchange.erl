@@ -20,14 +20,21 @@ test_put() ->
 
 initialize() ->
     {ok, Db} = esqlite3:open(?DB_FILENAME),
-    Sql = "CREATE TABLE search_requests "
+
+    CreateTableSql = "CREATE TABLE search_requests "
     "( id INTEGER PRIMARY KEY AUTOINCREMENT,"
     " position_id INTEGER NOT NULL,"
     " description TEXT NOT NULL,"
     " created_at DATETIME DEFAULT CURRENT_TIMESTAMP,"
     " result TEXT,"
     " updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);",
-    ok = esqlite3:exec(Sql, Db),
+    ok = esqlite3:exec(CreateTableSql, Db),
+
+
+    InsertTestRowSql = "INSERT INTO search_requests (position_id, description) VALUES (123, 'test');",
+    % InsertRowSql = io_lib:format(Template, ["test"]),
+    ok = esqlite3:exec(InsertTestRowSql, Db),
+
     esqlite3:close(Db).
 
 get_search_requests() ->
