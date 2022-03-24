@@ -30,13 +30,13 @@ initialize() ->
     " updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);",
     ok = esqlite3:exec(CreateTableSql, Db),
 
-
     InsertTestRowSql = "INSERT INTO search_requests (position_id, description) VALUES (123, 'test');",
     % InsertRowSql = io_lib:format(Template, ["test"]),
     ok = esqlite3:exec(InsertTestRowSql, Db),
 
     esqlite3:close(Db).
 
+% esqlite3:q("SELECT * from search_requests WHERE created_at > Datetime('2029-11-13 00:00:00');", Conn).
 get_search_requests() ->
     {ok, Conn} = esqlite3:open(?DB_FILENAME),
     Sql = "SELECT * from search_requests;",
