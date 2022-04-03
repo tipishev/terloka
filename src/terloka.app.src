@@ -1,12 +1,13 @@
 {application, terloka,
- [{description, "An OTP application"},
+ [{description, "Work with Toloka from Erlang"},
   {vsn, "0.1.0"},
   {registered, []},
   {mod, {terloka_app, []}},
   {applications,
    [kernel,
     stdlib,
-    hackney
+    hackney,
+    mnesia
    ]},
   {env,[]},
   {modules, []},
