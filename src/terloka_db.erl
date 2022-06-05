@@ -1,7 +1,7 @@
 -module(terloka_db).
 
 -export([install/0]).
--export([add_order/2, order_by_position_id/1]).
+-export([set_order/2, get_order/1]).
 
 -record(terloka_orders, {
     % external input
@@ -16,6 +16,8 @@
     updated_at
 }).
 
+%% @doc initializes terloka_orders mnesia table
+-spec install() -> ok.
 install() ->
     Nodes = [node()],
     ok = mnesia:create_schema(Nodes),
@@ -30,7 +32,11 @@ install() ->
     ),
     application:stop(mnesia).
 
-add_order(PositionId, Description) ->
+%% @doc sets order
+-spec set_order(PositionId, Description) -> ok when
+      PositionId :: pos_integer(),
+      Description :: binary().
+set_order(PositionId, Description) ->
     F = fun() ->
         Now = calendar:local_time(),
         % TODO return {error, order_exists}
@@ -43,7 +49,11 @@ add_order(PositionId, Description) ->
     end,
     mnesia:activity(transaction, F).
 
-order_by_position_id(PositionId) ->
+%% @doc gets order
+-spec get_order(PositionId) -> {ok, Order} | {error, notfound} when
+    PositionId :: pos_integer(),
+    Order :: tuple().
+get_order(PositionId) ->
     F = fun() ->
                 case mnesia:read({terloka_orders, PositionId}) of
                     [#terloka_orders{description=Description,

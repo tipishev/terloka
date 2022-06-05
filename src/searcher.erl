@@ -6,10 +6,26 @@
 -behaviour(gen_server).
 
 % module interface
--export([start_link/1, start/1, save/1, load/1, stop/1, pause/1, resume/1, status/1]).
+-export([
+    start_link/1,
+    start/1,
+    save/1,
+    load/1,
+    stop/1,
+    pause/1,
+    resume/1,
+    status/1
+]).
 
 % gen_server callbacks
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
+-export([
+    init/1,
+    handle_call/3,
+    handle_cast/2,
+    handle_info/2,
+    code_change/3,
+    terminate/2
+]).
 
 -include_lib("kernel/include/logger.hrl").
 
