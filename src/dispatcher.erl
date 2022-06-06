@@ -9,8 +9,10 @@
 
 %% Module interface
 -export([
+
     start_link/0,
-    stop/1,
+    stop/0,
+
     create_order/2,
     order_ready/2
 ]).
@@ -39,28 +41,29 @@
 start_link() ->
     ?LOG_INFO("Starting Dispatcher"),
     gen_server:start_link(
-        ?MODULE,
+        _ServerName = {local, ?MODULE},
+        _Module = ?MODULE,
         _Options = [],
         _DebuggingOptions = []
     ).
 
 %% @doc stops the dispatcher
-stop(Pid) ->
-    ?LOG_INFO("Stopping Dispatcher ~p", [Pid]),
-    gen_server:call(Pid, stop).
+stop() ->
+    ?LOG_INFO("Stopping Dispatcher"),
+    gen_server:call({local, ?MODULE}, stop).
 
 %% @doc tells the dispatcher to create an order
 % TODO register `dispatcher` name
-create_order(Pid, {OrderId, Description}) ->
+create_order(OrderId, Description) ->
     ?LOG_INFO("Creating order ~p: ~p", [OrderId, Description]),
     % TODO include self() For a notify?
-    gen_server:call(Pid, {create_order, OrderId, Description}).
+    gen_server:call(?MODULE, {create_order, OrderId, Description}).
 
 %% @doc tells the dispatcher that an order is complete
-order_ready(Pid, {OrderId, Result}) ->
+order_ready(OrderId, Result) ->
     ?LOG_INFO("Completing order ~p: ~p", [OrderId, Result]),
     % FIXME should include call to self()
-    gen_server:call(Pid, {order_ready, OrderId, Result}).
+    gen_server:call(?MODULE, {order_ready, OrderId, Result}).
 
 %%% GenServer callbacks
 
