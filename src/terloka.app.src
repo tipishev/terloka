@@ -1,7 +1,7 @@
 {application, terloka,
  [{description, "Work with Toloka from Erlang"},
   {vsn, "0.1.0"},
-  {registered, []},
+  {registered, [dispatcher]},
   {mod, {terloka_app, []}},
   {applications,
    [kernel,
