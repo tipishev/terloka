@@ -53,7 +53,6 @@ stop() ->
     gen_server:call({local, ?MODULE}, stop).
 
 %% @doc tells the dispatcher to create an order
-% TODO register `dispatcher` name
 create_order(OrderId, Description) ->
     ?LOG_INFO("Creating order ~p: ~p", [OrderId, Description]),
     % TODO include self() For a notify?
