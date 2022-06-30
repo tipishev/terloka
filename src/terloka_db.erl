@@ -1,7 +1,7 @@
 -module(terloka_db).
 
 -export([install/0]).
--export([set_order/2, get_order/1]).
+-export([create_order/2, get_order/1]).
 
 -record(terloka_orders, {
     % external input
@@ -33,13 +33,13 @@ install() ->
     application:stop(mnesia).
 
 %% @doc sets order
--spec set_order(PositionId, Description) -> ok when
+-spec create_order(PositionId, Description) -> ok when
       PositionId :: pos_integer(),
       Description :: binary().
-set_order(PositionId, Description) ->
+create_order(PositionId, Description) ->
     F = fun() ->
         Now = calendar:local_time(),
-        % TODO return {error, order_exists}
+        % FIXME return {error, order_exists}
         mnesia:write(#terloka_orders{
             position_id = PositionId,
             description = Description,

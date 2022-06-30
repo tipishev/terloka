@@ -72,11 +72,15 @@ init([]) ->
 
 %% @doc handles a `create_order` or `order_ready` call.
 handle_call({create_order, OrderId, Description}, _From, State) ->
-    ?LOG_INFO("Handling create_order ~p: ~p", [OrderId, Description]),
+    ?LOG_INFO("Handling create_order call ~p: ~p", [OrderId, Description]),
+    ok = terloka_db:create_order(OrderId, Description),
+    ?LOG_INFO("Created order ~p: ~p in the database", [OrderId, Description]),
+    % TODO start the searcher and save its PID to the state
     Reply = order_created,
     {reply, Reply, _NewState=State};
+% TODO check that the message is coming from correct worker
 handle_call({order_ready, OrderId, Result}, _From, State) ->
-    ?LOG_INFO("Handling order_ready ~p: ~p", [OrderId, Result]),
+    ?LOG_INFO("Handling order_ready call ~p: ~p", [OrderId, Result]),
     Reply = order_result_acknowledged,
     {reply, Reply, _NewState=State}.
 
