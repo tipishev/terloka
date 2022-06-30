@@ -81,9 +81,11 @@ handle_call({create_order, OrderId, Description}, _From, State) ->
 % TODO check that the message is coming from correct worker
 handle_call({order_ready, OrderId, Result}, _From, State) ->
     ?LOG_INFO("Handling order_ready call ~p: ~p", [OrderId, Result]),
+    ok = terloka_db:set_order_result(OrderId, Result),
     Reply = order_result_acknowledged,
     {reply, Reply, _NewState=State}.
 
+%% @doc ignores any broadcasts to the process
 handle_cast(Request, State) ->
     ?LOG_INFO("Ignoring cast ~p", [Request]),
     {noreply, _NewState=State}.
